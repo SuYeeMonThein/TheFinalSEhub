@@ -1,0 +1,10 @@
+node_modules/
+.firebase/
+firestore-debug.log
+ui-debug.log
+storage-debug.log
+.vscode/
+.DS_Store
+functions/lib/
+functions/node_modules/
+coverage/

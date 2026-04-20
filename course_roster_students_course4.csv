@@ -1,0 +1,11 @@
+id,course_id,student_id,name,email,year,created_at
+1,4,STU401,Alex Morgan,alex.morgan4@university.edu,2024,2026-04-20T10:05:12.000Z
+2,4,STU402,Jamie Lee,jamie.lee4@university.edu,2024,2026-04-20T10:05:12.000Z
+3,4,STU403,Sam Patel,sam.patel4@university.edu,2024,2026-04-20T10:05:12.000Z
+4,4,STU404,Casey Nguyen,casey.nguyen4@university.edu,2024,2026-04-20T10:05:12.000Z
+5,4,STU405,Riley Chen,riley.chen4@university.edu,2024,2026-04-20T10:05:12.000Z
+6,4,STU406,Taylor Gomez,taylor.gomez4@university.edu,2024,2026-04-20T10:05:12.000Z
+7,4,STU407,Jordan Kim,jordan.kim4@university.edu,2024,2026-04-20T10:05:12.000Z
+8,4,STU408,Avery Singh,avery.singh4@university.edu,2024,2026-04-20T10:05:12.000Z
+9,4,STU409,Morgan Diaz,morgan.diaz4@university.edu,2024,2026-04-20T10:05:12.000Z
+10,4,STU410,Quinn Baker,quinn.baker4@university.edu,2024,2026-04-20T10:05:12.000Z

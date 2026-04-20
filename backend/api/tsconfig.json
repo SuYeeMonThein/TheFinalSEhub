@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "Node16",
+    "lib": ["ES2020"],
+    "rootDir": "src",
+    "outDir": "lib",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "Node16",
+    "resolveJsonModule": true,
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "exclude": [
+    "node_modules",
+    "lib",
+    "coverage",
+    "**/__tests__/**",
+    "**/*.test.ts"
+  ]
+}
