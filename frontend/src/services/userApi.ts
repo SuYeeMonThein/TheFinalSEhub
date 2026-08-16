@@ -316,6 +316,42 @@ export const getUserRoles = async (
   };
 };
 
+interface MyProfileResponse {
+  user?: ApiUser | null;
+}
+
+export const getMyProfile = async (token: string): Promise<ApiUser> => {
+  const response = await fetch(buildUrl("/users/me"), {
+    headers: buildAuthHeaders(token),
+  });
+
+  let body: MyProfileResponse | ApiErrorResponse | undefined;
+
+  try {
+    body = (await response.json()) as typeof body;
+  } catch (_error) {
+    body = undefined;
+  }
+
+  if (!response.ok) {
+    const message =
+      body && "error" in body && typeof body.error === "string"
+        ? body.error
+        : "Failed to load your profile.";
+    throw new ApiError(message, response.status, body);
+  }
+
+  if (!body || !("user" in body) || !body.user) {
+    throw new ApiError(
+      "Profile payload missing in response.",
+      response.status,
+      body,
+    );
+  }
+
+  return body.user;
+};
+
 export const getMyRoles = async (token: string): Promise<UserRolesResponse> => {
   const response = await fetch(buildUrl(`/users/me/roles`), {
     headers: buildAuthHeaders(token),

@@ -6,7 +6,7 @@ import { MockRoleChooser, SwitchableRole } from "@/components/auth/MockRoleChoos
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { auth } from "@/lib/firebase";
 import { onIdTokenChanged } from "firebase/auth";
-import { getMyRoles } from "@/services/userApi";
+import { getMyRoles, getMyProfile } from "@/services/userApi";
 
 type AppRole = "student" | "coordinator" | "advisor";
 
@@ -102,6 +102,45 @@ const Index = () => {
     };
 
     void resolveRoleAccess();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [authToken, user]);
+
+  // The Firebase display name falls back to the email's local part (e.g. a
+  // student ID) when no display name is set, so replace it with the real
+  // name on file in the database once we can look it up.
+  useEffect(() => {
+    if (!user || !authToken) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const resolveRealName = async () => {
+      try {
+        const profile = await getMyProfile(authToken);
+
+        if (isCancelled || !profile.name || profile.name === user.name) {
+          return;
+        }
+
+        setUser((current) => {
+          if (!current) {
+            return current;
+          }
+
+          const updated = { ...current, name: profile.name };
+          localStorage.setItem("user", JSON.stringify(updated));
+          return updated;
+        });
+      } catch (error) {
+        console.warn("Failed to resolve profile name", error);
+      }
+    };
+
+    void resolveRealName();
 
     return () => {
       isCancelled = true;

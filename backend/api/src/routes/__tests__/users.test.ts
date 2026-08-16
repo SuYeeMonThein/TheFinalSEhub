@@ -7,6 +7,7 @@ import {
   findUserByEmail,
   listUsers,
 } from "../../services/userService";
+import { adminAuth } from "../../config/firebase";
 
 jest.mock("../../middleware/auth", () => ({
   verifyFirebaseAuth: (
@@ -34,6 +35,17 @@ jest.mock("../../services/userService", () => {
   };
 });
 
+// POST /users calls out to Firebase Admin to create the auth record before
+// touching the database. Without this mock, running the suite creates (and
+// on failure, half-cleans-up) real accounts in the live Firebase project.
+jest.mock("../../config/firebase", () => ({
+  adminAuth: {
+    createUser: jest.fn(),
+    setCustomUserClaims: jest.fn(),
+    deleteUser: jest.fn(),
+  },
+}));
+
 const buildApp = () => {
   const app = express();
   app.use(express.json());
@@ -43,9 +55,24 @@ const buildApp = () => {
 
 describe("POST /users", () => {
   const createUserMock = createUser as jest.MockedFunction<typeof createUser>;
+  const firebaseCreateUserMock = adminAuth.createUser as jest.MockedFunction<
+    typeof adminAuth.createUser
+  >;
+  const firebaseSetClaimsMock =
+    adminAuth.setCustomUserClaims as jest.MockedFunction<
+      typeof adminAuth.setCustomUserClaims
+    >;
+  const firebaseDeleteUserMock = adminAuth.deleteUser as jest.MockedFunction<
+    typeof adminAuth.deleteUser
+  >;
 
   beforeEach(() => {
     createUserMock.mockReset();
+    firebaseCreateUserMock.mockReset().mockResolvedValue({
+      uid: "test-firebase-uid",
+    } as any);
+    firebaseSetClaimsMock.mockReset().mockResolvedValue(undefined);
+    firebaseDeleteUserMock.mockReset().mockResolvedValue(undefined);
   });
 
   it("hashes password and creates user when coordinator calls endpoint", async () => {

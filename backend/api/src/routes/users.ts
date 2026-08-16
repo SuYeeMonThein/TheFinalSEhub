@@ -317,6 +317,52 @@ usersRouter.post(
  *       '404':
  *         description: User with the specified email was not found.
  */
+/**
+ * @openapi
+ * /users/me:
+ *   get:
+ *     summary: Retrieve the authenticated user's own record.
+ *     tags:
+ *       - Users
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: User retrieved successfully.
+ *       '401':
+ *         description: Missing or invalid token.
+ *       '404':
+ *         description: User record not found.
+ */
+usersRouter.get(
+  "/me",
+  verifyFirebaseAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const emailFromToken = req.user?.email;
+
+    if (!emailFromToken) {
+      res
+        .status(400)
+        .json({ error: "Email address missing from authentication token." });
+      return;
+    }
+
+    const { data, error } = await findUserByEmail(emailFromToken);
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    if (!data) {
+      res.status(404).json({ error: "User not found." });
+      return;
+    }
+
+    res.json({ user: sanitizeUser(data) });
+  },
+);
+
 usersRouter.get(
   "/me/roles",
   verifyFirebaseAuth,

@@ -1009,17 +1009,29 @@ export const UserManagement = ({ user }: UserManagementProps) => {
     }
   };
 
-  const generateSampleCsv = () => {
-    const sampleData = `student_id,name,email
-6831503001,John Smith,john.smith@university.edu
-6831503002,Jane Doe,jane.doe@university.edu
-6831503003,Bob Johnson,bob.johnson@university.edu`;
+  const escapeCsvField = (value: string): string =>
+    /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 
-    const blob = new Blob([sampleData], { type: "text/csv" });
+  const generateSampleCsv = () => {
+    const rows = users.map((u) => [
+      u.studentId || u.email.split("@")[0] || u.id,
+      u.name,
+      u.email,
+      u.role,
+    ]);
+
+    const csvData = [
+      ["student_id", "name", "email", "role"],
+      ...rows,
+    ]
+      .map((row) => row.map(escapeCsvField).join(","))
+      .join("\n");
+
+    const blob = new Blob([csvData], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "student_template.csv";
+    a.download = "users_export.csv";
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -1042,7 +1054,7 @@ export const UserManagement = ({ user }: UserManagementProps) => {
         <div className="flex space-x-3">
           <Button variant="outline" onClick={generateSampleCsv}>
             <Download className="w-4 h-4 mr-2" />
-            Download Template
+            Export Users
           </Button>
           <Button variant="outline" onClick={() => setIsCsvUploadOpen(true)}>
             <Upload className="w-4 h-4 mr-2" />
