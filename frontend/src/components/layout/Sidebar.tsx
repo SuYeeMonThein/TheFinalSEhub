@@ -1,11 +1,11 @@
 import { cn } from "@/lib/utils";
+import mfuLogo from "@/components/Icons/mfu.png";
 import {
   BookOpen,
   Upload,
   Archive,
   Users,
   BarChart3,
-  FileText,
   Search,
   ClipboardList,
   GraduationCap,
@@ -68,15 +68,19 @@ export const Sidebar = ({ user, currentView, onViewChange }: SidebarProps) => {
   const menuItems = getMenuItems();
 
   return (
-    <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-      <div className="p-6 border-b border-gray-200">
+    <div className="w-64 bg-[#06402B] border-r border-[#043823] flex flex-col">
+      <div className="p-6 border-b border-[#043823]">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <FileText className="w-6 h-6 text-white" />
+          <div className="flex items-center justify-center">
+            <img
+              src={mfuLogo}
+              alt="MFU Logo"
+              className="h-12 w-12 rounded-full object-contain"
+            />
           </div>
           <div>
-            <h2 className="font-semibold text-gray-900">SE Project Hub</h2>
-            <p className="text-sm text-gray-500 capitalize">
+            <h2 className="font-semibold text-white">SE Project Hub</h2>
+            <p className="text-sm text-gray-300 capitalize">
               {user.role === "advisor" ? "Advisor" : user.role}
             </p>
           </div>
@@ -94,11 +98,11 @@ export const Sidebar = ({ user, currentView, onViewChange }: SidebarProps) => {
                   className={cn(
                     "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                     currentView === item.id
-                      ? "bg-blue-50 text-blue-700 border border-blue-200"
-                      : "text-gray-700 hover:bg-gray-50",
+                      ? "bg-[#0B6D57] text-white border border-[#043823]"
+                      : "text-gray-200 hover:bg-[#0B6D57]/80 hover:text-white",
                   )}
                 >
-                  <Icon className="w-5 h-5" />
+                  <Icon className="w-5 h-5 text-gray-200" />
                   <span>{item.label}</span>
                 </button>
               </li>

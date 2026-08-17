@@ -551,7 +551,7 @@ export const CourseManagement = ({
                   advisorEmail: "",
                 });
               }}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-[#06402B] text-white hover:bg-[#0B6D57]"
             >
               <Plus className="w-4 h-4 mr-2" />
               Create Course

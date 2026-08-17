@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { MyProjectsView } from "@/components/projects/MyProjectsView";
@@ -54,19 +55,26 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
   const { data: archiveProjects = [], isLoading: archiveLoading } =
     useArchiveProjects(authToken);
 
-  // Load saved state on component mount
-  useEffect(() => {
-    const savedView = localStorage.getItem("currentView");
-    const savedProject = localStorage.getItem("selectedProject");
+  const navigate = useNavigate();
+  const location = useLocation();
 
-    if (savedView) {
-      setCurrentView(savedView);
+  // Derive current view from URL (fallback to saved state)
+  useEffect(() => {
+    const path = location.pathname.replace(/^\/dashboard\/?/, "");
+    const segment = path.split("/")[0];
+
+    if (segment && segment.length > 0) {
+      setCurrentView(segment);
+    } else {
+      const savedView = localStorage.getItem("currentView");
+      if (savedView) setCurrentView(savedView);
     }
 
+    const savedProject = localStorage.getItem("selectedProject");
     if (savedProject && savedProject !== "null") {
       setSelectedProject(savedProject);
     }
-  }, []);
+  }, [location.pathname]);
 
   // Save state whenever it changes
   useEffect(() => {
@@ -90,6 +98,10 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
   const handleViewChange = (view: string) => {
     setCurrentView(view);
     setSelectedProject(null); // Clear selected project when changing views
+    // Navigate so history is created
+    try {
+      navigate(`/dashboard/${view}`);
+    } catch {}
   };
 
   const handleProjectSelection = (projectId: string, source?: string) => {

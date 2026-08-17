@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { SetPasswordModal } from "@/components/auth/SetPasswordModal";
@@ -23,6 +24,7 @@ const Index = () => {
   const [selectedMockRole, setSelectedMockRole] = useState<SwitchableRole | null>(null);
   const [canChooseRole, setCanChooseRole] = useState(false);
   const [isResolvingRoleAccess, setIsResolvingRoleAccess] = useState(false);
+  const navigate = useNavigate();
 
   // Load user from localStorage on component mount
   useEffect(() => {
@@ -224,6 +226,13 @@ const Index = () => {
     if (isFirstLogin) {
       setShowPasswordModal(true);
     }
+
+    // Navigate to dashboard so the transition creates a browser history entry
+    try {
+      navigate("/dashboard");
+    } catch {
+      // ignore navigation errors in non-router environments
+    }
   };
 
   const handleLogout = () => {
@@ -246,6 +255,13 @@ const Index = () => {
     void signOut(auth).catch((error) => {
       console.error("Failed to sign out from Firebase", error);
     });
+
+    // Redirect to login route and replace history so Back doesn't return to a logged-in state
+    try {
+      navigate("/login", { replace: true });
+    } catch {
+      // ignore navigation errors in non-router environments
+    }
   };
 
   const handleMockRoleSelect = (role: SwitchableRole) => {
