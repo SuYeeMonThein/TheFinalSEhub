@@ -373,3 +373,29 @@ export const downloadProjectFile = async (
   window.URL.revokeObjectURL(url);
   document.body.removeChild(a);
 };
+
+/**
+ * Remove an already-uploaded attachment from a project (storage + metadata).
+ */
+export const deleteProjectFile = async (
+  projectId: number,
+  filename: string,
+  token: string,
+): Promise<void> => {
+  const response = await fetch(
+    buildUrl(`/projects/${projectId}/files/${encodeURIComponent(filename)}`),
+    {
+      method: "DELETE",
+      headers: buildAuthHeaders(token),
+    },
+  );
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const message =
+      body && typeof body === "object" && "error" in body
+        ? (body as { error: string }).error
+        : "Failed to remove file";
+    throw new ApiError(message, response.status, body);
+  }
+};

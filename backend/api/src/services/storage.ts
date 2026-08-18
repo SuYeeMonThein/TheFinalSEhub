@@ -56,6 +56,21 @@ export const downloadFile = async (
 };
 
 /**
+ * Delete a file from Supabase Storage.
+ */
+export const deleteFile = async (
+  storagePath: string,
+  bucketName?: string,
+): Promise<void> => {
+  const bucket = getBucket(bucketName);
+  const { error } = await bucket.remove([storagePath]);
+
+  if (error) {
+    throw new Error(`Supabase storage delete failed: ${error.message}`);
+  }
+};
+
+/**
  * Generate a signed URL for a file (valid for the given number of seconds).
  */
 export const getSignedUrl = async (

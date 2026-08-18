@@ -22,7 +22,7 @@ import {
 } from "../services/projectService";
 import { findUserByEmail, UserRecord } from "../services/userService";
 import { getSupabaseAdminClient } from "../services/supabaseClient";
-import { uploadFile, downloadFile } from "../services/storage";
+import { uploadFile, downloadFile, deleteFile } from "../services/storage";
 
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
@@ -309,45 +309,76 @@ const formatProjectResponse = (record: ProjectWithRelations) => {
       )
     : [];
 
-  // Build files list: start with metadata files, then enrich with file table data
+  // Build files list: start with metadata files, then enrich with file table data.
+  // Dedup by filename (not storagePath) — metadata entries round-tripped
+  // through the edit form's PATCH never carry a storagePath, so matching on
+  // storagePath alone can never line them up with their file-table row and
+  // ends up listing the same upload twice.
   const metadataFiles = Array.isArray(parsedMetadata.files)
     ? parsedMetadata.files.filter(
         (file) => typeof file === "object" && file !== null,
       )
     : [];
 
-  // Build a lookup of file_link → true for files in the file table
-  const fileTablePaths = new Set((uploadedFiles ?? []).map((f) => f.file_link));
+  const normalizeFileName = (name: string) => name.trim().toLowerCase();
 
-  // Merge: mark metadata files as downloadable if they have a storagePath in file table
-  const files = metadataFiles.map((f: any) => {
-    const hasStorage = !!(f.storagePath && fileTablePaths.has(f.storagePath));
-    return {
+  // Build a lookup of cleaned filename → storagePath for files in the file table
+  const fileTableByName = new Map<string, string>();
+  for (const dbFile of uploadedFiles ?? []) {
+    const fileName = dbFile.file_link.split("/").pop() ?? dbFile.file_link;
+    // Strip timestamp prefix (e.g., "1234567890_filename.pdf" -> "filename.pdf")
+    const cleanName = fileName.replace(/^\d+_/, "");
+    fileTableByName.set(normalizeFileName(cleanName), dbFile.file_link);
+  }
+
+  const files: Array<{
+    name: string;
+    size?: string;
+    type?: string;
+    storagePath: string | null;
+    downloadable: boolean;
+  }> = [];
+  const seenFileNames = new Set<string>();
+
+  for (const f of metadataFiles as any[]) {
+    if (typeof f.name !== "string" || !f.name) {
+      continue;
+    }
+
+    const key = normalizeFileName(f.name);
+    if (seenFileNames.has(key)) {
+      continue;
+    }
+    seenFileNames.add(key);
+
+    const storagePath = f.storagePath ?? fileTableByName.get(key) ?? null;
+    files.push({
       name: f.name,
       size: f.size,
       type: f.type,
-      storagePath: f.storagePath ?? null,
-      downloadable: hasStorage,
-    };
-  });
+      storagePath,
+      downloadable: !!storagePath,
+    });
+  }
 
   // Also add any file table entries not already represented in metadata
   for (const dbFile of uploadedFiles ?? []) {
-    const alreadyListed = files.some(
-      (f: any) => f.storagePath === dbFile.file_link,
-    );
-    if (!alreadyListed) {
-      const fileName = dbFile.file_link.split("/").pop() ?? dbFile.file_link;
-      // Strip timestamp prefix (e.g., "1234567890_filename.pdf" -> "filename.pdf")
-      const cleanName = fileName.replace(/^\d+_/, "");
-      files.push({
-        name: cleanName,
-        size: undefined,
-        type: undefined,
-        storagePath: dbFile.file_link,
-        downloadable: true,
-      });
+    const fileName = dbFile.file_link.split("/").pop() ?? dbFile.file_link;
+    const cleanName = fileName.replace(/^\d+_/, "");
+    const key = normalizeFileName(cleanName);
+
+    if (seenFileNames.has(key)) {
+      continue;
     }
+    seenFileNames.add(key);
+
+    files.push({
+      name: cleanName,
+      size: undefined,
+      type: undefined,
+      storagePath: dbFile.file_link,
+      downloadable: true,
+    });
   }
 
   const metadataGrade =
@@ -1644,6 +1675,133 @@ projectsRouter.get(
       console.error("[GET /projects/:id/files/:filename] error:", err);
       res.status(500).json({
         error: err instanceof Error ? err.message : "Download failed.",
+      });
+    }
+  },
+);
+
+/* ------------------------------------------------------------------ */
+/*  FILE DELETE — DELETE /projects/:id/files/:filename                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * @openapi
+ * /projects/{id}/files/{filename}:
+ *   delete:
+ *     summary: Remove an uploaded attachment from a project
+ *     tags:
+ *       - Projects
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: filename
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       '200':
+ *         description: File removed successfully
+ *       '404':
+ *         description: File not found
+ */
+projectsRouter.delete(
+  "/:id/files/:filename",
+  verifyFirebaseAuth,
+  async (req: AuthedRequest, res: Response) => {
+    try {
+      const projectId = parseInt(req.params.id, 10);
+      const requestedFilename = decodeURIComponent(req.params.filename);
+
+      if (Number.isNaN(projectId)) {
+        res.status(400).json({ error: "Invalid project id." });
+        return;
+      }
+
+      const projectResult = await getProjectById(projectId);
+      if (
+        projectResult.error ||
+        !projectResult.data ||
+        projectResult.data.length === 0
+      ) {
+        res.status(404).json({ error: "Project not found." });
+        return;
+      }
+
+      const record = projectResult.data[0];
+      const metadata: ProjectMetadata = record.metadata ?? {};
+      const metadataFiles = Array.isArray(metadata.files) ? metadata.files : [];
+      const normalizedTarget = requestedFilename.trim().toLowerCase();
+
+      const supabase = getSupabaseAdminClient();
+      const { data: fileRows } = await supabase
+        .from("file")
+        .select("id, file_link")
+        .eq("project_id", projectId);
+
+      const matchingRows = (fileRows ?? []).filter((row: any) => {
+        const fileName = (row.file_link as string).split("/").pop() ?? "";
+        const cleanName = fileName.replace(/^\d+_/, "");
+        return cleanName.trim().toLowerCase() === normalizedTarget;
+      });
+
+      const metadataHasEntry = metadataFiles.some(
+        (f: any) =>
+          typeof f?.name === "string" &&
+          f.name.trim().toLowerCase() === normalizedTarget,
+      );
+
+      if (matchingRows.length === 0 && !metadataHasEntry) {
+        res.status(404).json({ error: "File not found on this project." });
+        return;
+      }
+
+      // Best-effort remove the underlying storage objects.
+      await Promise.all(
+        matchingRows.map((row: any) =>
+          deleteFile(row.file_link).catch((err) => {
+            console.error(
+              "[DELETE /projects/:id/files/:filename] storage delete failed:",
+              err,
+            );
+          }),
+        ),
+      );
+
+      if (matchingRows.length > 0) {
+        await supabase
+          .from("file")
+          .delete()
+          .in(
+            "id",
+            matchingRows.map((row: any) => row.id),
+          );
+      }
+
+      const updatedFiles = metadataFiles.filter(
+        (f: any) =>
+          !(
+            typeof f?.name === "string" &&
+            f.name.trim().toLowerCase() === normalizedTarget
+          ),
+      );
+      const updatedMetadata = { ...metadata, files: updatedFiles };
+
+      await supabase
+        .from("project")
+        .update({ comment_student: JSON.stringify(updatedMetadata) })
+        .eq("id", projectId);
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error("[DELETE /projects/:id/files/:filename] error:", err);
+      res.status(500).json({
+        error: err instanceof Error ? err.message : "Delete failed.",
       });
     }
   },

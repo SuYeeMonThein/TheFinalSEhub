@@ -21,6 +21,7 @@ import {
   submitProject,
   updateProject,
   uploadProjectFiles,
+  deleteProjectFile,
   type CreateProjectPayload,
   type UpdateProjectPayload,
   type ProjectDto,
@@ -177,6 +178,9 @@ export const ProjectSubmissionForm = ({
   const [pendingFiles, setPendingFiles] = useState<
     { pendingId: string; file: File }[]
   >([]);
+  const [removingFileName, setRemovingFileName] = useState<string | null>(
+    null
+  );
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => [
     buildSubmitterMember(),
   ]);
@@ -482,6 +486,58 @@ export const ProjectSubmissionForm = ({
       ...prev,
       files: [...prev.files, ...fileObjects],
     }));
+  };
+
+  const handleRemoveFile = async (
+    file: FormState["files"][number],
+    index: number
+  ) => {
+    // Not-yet-uploaded files only exist in local state — just drop them.
+    if (file.pendingId) {
+      setFormData((prev) => ({
+        ...prev,
+        files: prev.files.filter((_, i) => i !== index),
+      }));
+      setPendingFiles((prev) =>
+        prev.filter((entry) => entry.pendingId !== file.pendingId)
+      );
+      return;
+    }
+
+    // Already-uploaded files live in storage and a DB row independent of
+    // this form's local state — dropping them from formData.files alone
+    // doesn't delete them, so they resurface next time the project loads.
+    if (!editingProjectId || !authToken) {
+      setFormData((prev) => ({
+        ...prev,
+        files: prev.files.filter((_, i) => i !== index),
+      }));
+      return;
+    }
+
+    setRemovingFileName(file.name);
+    try {
+      await deleteProjectFile(Number(editingProjectId), file.name, authToken);
+      setFormData((prev) => ({
+        ...prev,
+        files: prev.files.filter((_, i) => i !== index),
+      }));
+      void queryClient.invalidateQueries({ queryKey: ["projects", authToken] });
+      toast({
+        title: "File removed",
+        description: `${file.name} has been deleted.`,
+      });
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Failed to remove file.";
+      toast({
+        title: "Remove failed",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setRemovingFileName(null);
+    }
   };
 
   const addTeamMember = () => {
@@ -1225,24 +1281,12 @@ export const ProjectSubmissionForm = ({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          setFormData((prev) => ({
-                            ...prev,
-                            files: prev.files.filter((_, i) => i !== index),
-                          }));
-                          // Pending (not-yet-uploaded) files aren't index-
-                          // aligned with formData.files once pre-existing
-                          // files are mixed in — match by pendingId instead.
-                          if (file.pendingId) {
-                            setPendingFiles((prev) =>
-                              prev.filter(
-                                (entry) => entry.pendingId !== file.pendingId
-                              )
-                            );
-                          }
-                        }}
+                        disabled={removingFileName === file.name}
+                        onClick={() => handleRemoveFile(file, index)}
                       >
-                        Remove
+                        {removingFileName === file.name
+                          ? "Removing..."
+                          : "Remove"}
                       </Button>
                     </div>
                   ))}
