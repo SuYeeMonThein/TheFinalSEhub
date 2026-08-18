@@ -10,6 +10,37 @@ export interface ParsedRosterStudent {
 
 const normalizeHeader = (value: string): string => value.trim().toLowerCase();
 
+const parseCsvLine = (line: string): string[] => {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      values.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  values.push(current.trim());
+  return values;
+};
+
 const findHeaderIndex = (headers: string[], keys: string[]): number => {
   for (const key of keys) {
     const index = headers.indexOf(key);
@@ -21,7 +52,8 @@ const findHeaderIndex = (headers: string[], keys: string[]): number => {
 };
 
 export const parseRosterCsv = (text: string): ParsedRosterStudent[] => {
-  const lines = text
+  const normalizedText = text.replace(/^\uFEFF/, "");
+  const lines = normalizedText
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
@@ -30,7 +62,7 @@ export const parseRosterCsv = (text: string): ParsedRosterStudent[] => {
     throw new Error("File must contain at least a header row and one data row");
   }
 
-  const headers = lines[0].split(",").map(normalizeHeader);
+  const headers = parseCsvLine(lines[0]).map(normalizeHeader);
   const studentIdIndex = findHeaderIndex(headers, ["student id", "student_id"]);
   const nameIndex = findHeaderIndex(headers, ["name"]);
   const emailIndex = findHeaderIndex(headers, ["email"]);
@@ -39,7 +71,7 @@ export const parseRosterCsv = (text: string): ParsedRosterStudent[] => {
   const students: ParsedRosterStudent[] = [];
 
   for (let i = 1; i < lines.length; i += 1) {
-    const values = lines[i].split(",").map((value) => value.trim());
+    const values = parseCsvLine(lines[i]);
 
     if (values.length < 3) {
       continue;

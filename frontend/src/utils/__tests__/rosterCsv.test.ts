@@ -51,6 +51,31 @@ describe("parseRosterCsv", () => {
     expect(students[0].errorMessage).toBe("Invalid email format");
   });
 
+  it("handles quoted values and whitespace in roster CSV rows", () => {
+    const text =
+      '"Student ID","Name","Email","Year"\n' +
+      '"STU777","Doe, Jane","jane.doe@university.edu","2024"\n' +
+      '"STU888","  Smith, John  ","john.smith@university.edu","2025"\n';
+
+    const students = parseRosterCsv(text);
+
+    expect(students).toHaveLength(2);
+    expect(students[0]).toMatchObject({
+      studentId: "STU777",
+      name: "Doe, Jane",
+      email: "jane.doe@university.edu",
+      year: "2024",
+      status: "active",
+    });
+    expect(students[1]).toMatchObject({
+      studentId: "STU888",
+      name: "Smith, John",
+      email: "john.smith@university.edu",
+      year: "2025",
+      status: "active",
+    });
+  });
+
   it("throws when the file has no data rows", () => {
     const text = "Student ID,Name,Email,Year\n";
 
