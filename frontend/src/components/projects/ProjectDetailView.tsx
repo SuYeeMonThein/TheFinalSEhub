@@ -336,15 +336,32 @@ export const ProjectDetailView = ({
       if (!confirmComplete) {
         return;
       }
-    } else {
-      if (!reviewFeedback.trim() && !newComment.trim()) {
-        toast({
-          title: "Feedback required",
-          description: "Please provide feedback before rejecting.",
-          variant: "destructive",
-        });
-        return;
+    } else if (
+      !reviewFeedback.trim() &&
+      !newComment.trim() &&
+      !project.feedback?.advisor?.trim()
+    ) {
+      toast({
+        title: "Feedback required",
+        description: "Please provide feedback before rejecting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Persist whatever the advisor typed before flipping the status, so the
+    // student can actually see why the project was approved/denied — the
+    // feedback/comment boxes are otherwise separate, unsaved form state.
+    try {
+      if (reviewFeedback.trim()) {
+        await feedbackMutation.mutateAsync(reviewFeedback.trim());
+      } else if (newComment.trim()) {
+        await postCommentMutation.mutateAsync(newComment.trim());
       }
+    } catch {
+      // The mutations already surface their own error toast; don't update
+      // the status if saving the feedback/comment failed.
+      return;
     }
 
     const updatedStatus: ProjectStatus =
