@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { nanoid } from "nanoid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -81,7 +81,7 @@ const createInitialFormState = () => ({
   keywords: [] as string[],
   groupMembers: [] as string[],
   advisors: [] as string[],
-  files: [] as { name: string; size?: string; type?: string }[],
+  files: [] as { name: string; size?: string; type?: string; pendingId?: string }[],
   externalLinks: [] as string[],
   completionDate: "",
   competitionName: "",
@@ -174,7 +174,9 @@ export const ProjectSubmissionForm = ({
 
   const [newKeyword, setNewKeyword] = useState("");
   const [newLink, setNewLink] = useState("");
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<
+    { pendingId: string; file: File }[]
+  >([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => [
     buildSubmitterMember(),
   ]);
@@ -206,14 +208,20 @@ export const ProjectSubmissionForm = ({
     });
   }, [buildSubmitterMember, user.email]);
 
-  // Load project data when editing
+  // Load project data when editing. Guarded so it only runs once per
+  // editingProjectId — otherwise a background refetch of `projects` (e.g.
+  // from an unrelated query invalidation) replaces this ref, the effect
+  // re-fires, and it silently overwrites in-progress edits like a removed
+  // file or a freshly typed description.
+  const loadedProjectIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (editingProjectId) {
+    if (editingProjectId && loadedProjectIdRef.current !== editingProjectId) {
       const projectsToUse = passedProjects || mockProjects;
       const projectToEdit = projectsToUse.find(
         (p) => p.id.toString() === editingProjectId
       );
       if (projectToEdit) {
+        loadedProjectIdRef.current = editingProjectId;
         setFormData((prev) => ({
           ...prev,
           title: projectToEdit.title,
@@ -287,7 +295,7 @@ export const ProjectSubmissionForm = ({
       // Upload actual files to storage after project is created
       if (pendingFiles.length > 0) {
         try {
-          await uploadProjectFiles(project.id, pendingFiles, authToken);
+          await uploadProjectFiles(project.id, pendingFiles.map((f) => f.file), authToken);
         } catch (err) {
           console.error("File upload failed:", err);
         }
@@ -338,7 +346,7 @@ export const ProjectSubmissionForm = ({
       // Upload actual files to storage after project is updated
       if (pendingFiles.length > 0) {
         try {
-          await uploadProjectFiles(project.id, pendingFiles, authToken);
+          await uploadProjectFiles(project.id, pendingFiles.map((f) => f.file), authToken);
         } catch (err) {
           console.error("File upload failed:", err);
         }
@@ -450,15 +458,25 @@ export const ProjectSubmissionForm = ({
       });
     }
 
-    // Convert files to the format expected by the form
+    // Convert files to the format expected by the form. Each gets a stable
+    // pendingId so removing it later can find the matching raw File object
+    // in `pendingFiles` without relying on the two lists sharing indexes
+    // (they don't, once pre-existing and newly-added files are mixed).
     const fileObjects = validFiles.map((file) => ({
       name: file.name,
       size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
       type: file.type.split("/")[1].toUpperCase(),
+      pendingId: nanoid(),
     }));
 
     // Keep the raw File objects for actual upload later
-    setPendingFiles((prev) => [...prev, ...validFiles]);
+    setPendingFiles((prev) => [
+      ...prev,
+      ...validFiles.map((file, i) => ({
+        pendingId: fileObjects[i].pendingId,
+        file,
+      })),
+    ]);
 
     setFormData((prev) => ({
       ...prev,
@@ -1212,9 +1230,16 @@ export const ProjectSubmissionForm = ({
                             ...prev,
                             files: prev.files.filter((_, i) => i !== index),
                           }));
-                          setPendingFiles((prev) =>
-                            prev.filter((_, i) => i !== index)
-                          );
+                          // Pending (not-yet-uploaded) files aren't index-
+                          // aligned with formData.files once pre-existing
+                          // files are mixed in — match by pendingId instead.
+                          if (file.pendingId) {
+                            setPendingFiles((prev) =>
+                              prev.filter(
+                                (entry) => entry.pendingId !== file.pendingId
+                              )
+                            );
+                          }
                         }}
                       >
                         Remove
