@@ -268,7 +268,11 @@ export const ProjectDetailView = ({
   };
 
   const getStatusDisplayName = (status: string) => {
-    return status === "Draft" ? "Deny" : status;
+    if (!status) {
+      return "Unknown";
+    }
+
+    return status;
   };
 
   const statusMutation = useMutation<ProjectDto, Error, ProjectStatus>({
@@ -337,13 +341,22 @@ export const ProjectDetailView = ({
         return;
       }
     } else {
-      if (!reviewFeedback.trim() && !newComment.trim()) {
+      const feedbackText = reviewFeedback.trim();
+      if (!feedbackText && !newComment.trim()) {
         toast({
           title: "Feedback required",
           description: "Please provide feedback before rejecting.",
           variant: "destructive",
         });
         return;
+      }
+
+      if (feedbackText) {
+        try {
+          await feedbackMutation.mutateAsync(feedbackText);
+        } catch {
+          return;
+        }
       }
     }
 
@@ -1427,7 +1440,9 @@ export const ProjectDetailView = ({
                       <p className="font-medium text-sm text-gray-900">
                         {criterion.name}
                       </p>
-                      <Badge variant="outline">Weight: {criterion.weight}%</Badge>
+                      <Badge variant="outline">
+                        Weight: {criterion.weight}%
+                      </Badge>
                     </div>
                     {criterion.description && (
                       <p className="text-sm text-gray-600 mt-1">

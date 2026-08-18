@@ -77,8 +77,7 @@ export const parseRosterCsv = (text: string): ParsedRosterStudent[] => {
       continue;
     }
 
-    const studentId =
-      studentIdIndex >= 0 ? values[studentIdIndex] : values[0];
+    const studentId = studentIdIndex >= 0 ? values[studentIdIndex] : values[0];
     const name = nameIndex >= 0 ? values[nameIndex] : values[1];
     const email = emailIndex >= 0 ? values[emailIndex] : values[2];
     const year = yearIndex >= 0 ? values[yearIndex] : values[3];

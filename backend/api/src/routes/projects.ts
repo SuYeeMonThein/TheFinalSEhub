@@ -309,46 +309,89 @@ const formatProjectResponse = (record: ProjectWithRelations) => {
       )
     : [];
 
-  // Build files list: start with metadata files, then enrich with file table data
+  // Build files list: dedupe metadata files, then enrich them with file table data
   const metadataFiles = Array.isArray(parsedMetadata.files)
     ? parsedMetadata.files.filter(
         (file) => typeof file === "object" && file !== null,
       )
     : [];
 
-  // Build a lookup of file_link → true for files in the file table
   const fileTablePaths = new Set((uploadedFiles ?? []).map((f) => f.file_link));
+  const filesByKey = new Map<string, any>();
+  const normalizeFileKey = (value: string | null | undefined) =>
+    (value ?? "").trim().toLowerCase().replace(/[\s_]+/g, "");
 
-  // Merge: mark metadata files as downloadable if they have a storagePath in file table
-  const files = metadataFiles.map((f: any) => {
-    const hasStorage = !!(f.storagePath && fileTablePaths.has(f.storagePath));
-    return {
-      name: f.name,
-      size: f.size,
-      type: f.type,
-      storagePath: f.storagePath ?? null,
-      downloadable: hasStorage,
-    };
-  });
+  const registerFile = (candidate: any) => {
+    if (!candidate || typeof candidate !== "object") return;
+
+    const storagePath =
+      typeof candidate.storagePath === "string" ? candidate.storagePath : null;
+    const fileName = typeof candidate.name === "string" ? candidate.name : null;
+    const normalizedName = normalizeFileKey(fileName);
+    const key = storagePath ?? normalizedName ?? "__unknown__";
+
+    const existing = Array.from(filesByKey.values()).find((entry: any) => {
+      if (!entry) return false;
+      const entryStorage = typeof entry.storagePath === "string" ? entry.storagePath : null;
+      const entryName = typeof entry.name === "string" ? entry.name : null;
+      if (storagePath && entryStorage && storagePath === entryStorage) {
+        return true;
+      }
+      if (normalizedName && normalizeFileKey(entryName) === normalizedName) {
+        return true;
+      }
+      if (fileName && entryName && normalizeFileKey(entryName) === normalizeFileKey(fileName)) {
+        return true;
+      }
+      return false;
+    });
+
+    if (existing) {
+      existing.name = existing.name || fileName || "Unnamed file";
+      existing.size = existing.size ?? candidate.size ?? undefined;
+      existing.type = existing.type ?? candidate.type ?? undefined;
+      existing.storagePath = existing.storagePath || storagePath || null;
+      existing.downloadable =
+        existing.downloadable || !!(existing.storagePath && fileTablePaths.has(existing.storagePath));
+      return;
+    }
+
+    filesByKey.set(key, {
+      name: fileName ?? "Unnamed file",
+      size: candidate.size ?? undefined,
+      type: candidate.type ?? undefined,
+      storagePath: storagePath ?? null,
+      downloadable: !!(storagePath && fileTablePaths.has(storagePath)),
+    });
+  };
+
+  for (const file of metadataFiles) {
+    registerFile(file);
+  }
 
   // Also add any file table entries not already represented in metadata
   for (const dbFile of uploadedFiles ?? []) {
-    const alreadyListed = files.some(
-      (f: any) => f.storagePath === dbFile.file_link,
+    const fileName = dbFile.file_link.split("/").pop() ?? dbFile.file_link;
+    const cleanName = fileName.replace(/^\d+_/, "");
+    const fileCandidate = {
+      name: cleanName,
+      size: undefined,
+      type: undefined,
+      storagePath: dbFile.file_link,
+    };
+
+    const alreadyListed = Array.from(filesByKey.values()).some(
+      (f: any) =>
+        (f.storagePath && f.storagePath === dbFile.file_link) ||
+        (f.name && f.name === cleanName),
     );
+
     if (!alreadyListed) {
-      const fileName = dbFile.file_link.split("/").pop() ?? dbFile.file_link;
-      // Strip timestamp prefix (e.g., "1234567890_filename.pdf" -> "filename.pdf")
-      const cleanName = fileName.replace(/^\d+_/, "");
-      files.push({
-        name: cleanName,
-        size: undefined,
-        type: undefined,
-        storagePath: dbFile.file_link,
-        downloadable: true,
-      });
+      registerFile(fileCandidate);
     }
   }
+
+  const files = Array.from(filesByKey.values());
 
   const metadataGrade =
     typeof parsedMetadata.grade === "string" ? parsedMetadata.grade : null;
@@ -810,6 +853,44 @@ projectsRouter.patch(
       return;
     }
 
+    // Clean up file table rows for files that are no longer in metadata
+    if (files.length === 0 || !Array.isArray(files) || files.length === 0) {
+      // If no files in update, delete all file table rows for this project
+      await supabase.from("file").delete().eq("project_id", numericProjectId);
+    } else {
+      // Otherwise, delete file rows that don't match any of the remaining files
+      const fileStoragePaths = new Set<string>();
+      const existingMetadata = updatedMetadata;
+      if (Array.isArray(existingMetadata.files)) {
+        for (const file of existingMetadata.files) {
+          if (
+            file &&
+            typeof file === "object" &&
+            typeof (file as any).storagePath === "string"
+          ) {
+            fileStoragePaths.add((file as any).storagePath);
+          }
+        }
+      }
+
+      if (fileStoragePaths.size > 0) {
+        // Fetch all file rows for this project
+        const { data: allFileRows } = await supabase
+          .from("file")
+          .select("id, file_link")
+          .eq("project_id", numericProjectId);
+
+        // Delete any rows whose file_link is not in the current files list
+        const rowsToDelete = (allFileRows ?? []).filter(
+          (row: any) => !fileStoragePaths.has(row.file_link),
+        );
+
+        for (const row of rowsToDelete) {
+          await supabase.from("file").delete().eq("id", row.id);
+        }
+      }
+    }
+
     const linkResult = await replaceProjectLinks(
       numericProjectId,
       externalLinks,
@@ -1252,6 +1333,42 @@ projectsRouter.patch(
     if (updateResponse.error) {
       res.status(500).json({ error: updateResponse.error.message });
       return;
+    }
+
+    // Clean up orphaned file table rows when archiving/approving projects
+    // This ensures that if there are duplicate file records from previous operations,
+    // they don't get re-added when the project is retrieved
+    const supabase = getSupabaseAdminClient();
+    const existingMetadata: ProjectMetadata = projectRecord.metadata ?? {};
+    
+    if (Array.isArray(existingMetadata.files) && existingMetadata.files.length > 0) {
+      const fileStoragePaths = new Set<string>();
+      for (const file of existingMetadata.files) {
+        if (
+          file &&
+          typeof file === "object" &&
+          typeof (file as any).storagePath === "string"
+        ) {
+          fileStoragePaths.add((file as any).storagePath);
+        }
+      }
+
+      if (fileStoragePaths.size > 0) {
+        // Fetch all file rows for this project
+        const { data: allFileRows } = await supabase
+          .from("file")
+          .select("id, file_link")
+          .eq("project_id", numericProjectId);
+
+        // Delete any rows whose file_link is not in the current files list
+        const rowsToDelete = (allFileRows ?? []).filter(
+          (row: any) => !fileStoragePaths.has(row.file_link),
+        );
+
+        for (const row of rowsToDelete) {
+          await supabase.from("file").delete().eq("id", row.id);
+        }
+      }
     }
 
     const refreshedProject = await getProjectById(numericProjectId);

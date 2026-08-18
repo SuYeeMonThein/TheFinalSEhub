@@ -42,8 +42,7 @@ describe("parseRosterCsv", () => {
 
   it("marks invalid email rows as errors", () => {
     const text =
-      "Student ID,Name,Email,Year\n" +
-      "STU777,No Email,invalid-email,2024";
+      "Student ID,Name,Email,Year\n" + "STU777,No Email,invalid-email,2024";
 
     const students = parseRosterCsv(text);
 
