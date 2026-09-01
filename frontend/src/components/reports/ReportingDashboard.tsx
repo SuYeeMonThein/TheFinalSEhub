@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 import { Download, TrendingUp, Award, Users, FileText, Loader2 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { analyticsApi } from "@/services/analyticsApi";
 import { auth } from "@/lib/firebase";
 
@@ -22,97 +23,82 @@ interface ReportingDashboardProps {
 export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
   const [selectedYear, setSelectedYear] = useState("2026");
   const [selectedSemester, setSelectedSemester] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Real data state
-  const [metrics, setMetrics] = useState<any>(null);
-  const [trends, setTrends] = useState<any[]>([]);
-  const [projectTypes, setProjectTypes] = useState<any[]>([]);
-  const [approvalRates, setApprovalRates] = useState<any[]>([]);
 
-  // Helper function to get fresh auth token
+  // Memoize the auth token getter to prevent unnecessary re-creation
   const getAuthToken = async (): Promise<string> => {
     const currentUser = auth.currentUser;
     if (!currentUser) {
       throw new Error("User not authenticated. Please log in again.");
     }
-    // Force refresh token to ensure it's valid and not expired
-    return await currentUser.getIdToken(true);
+    return await currentUser.getIdToken(false); // false = don't force refresh
   };
 
-  useEffect(() => {
-    if (user.role === "coordinator") {
-      loadAnalytics();
-    }
-  }, [selectedYear, selectedSemester, user.role]);
+  const yearNum = selectedYear === "all" ? undefined : parseInt(selectedYear, 10);
+  const semesterValue =
+    selectedSemester === "all"
+      ? "all"
+      : selectedSemester === "spring"
+        ? "1"
+        : selectedSemester === "summer"
+          ? "2"
+          : selectedSemester === "fall"
+            ? "3"
+            : "all";
 
-  const loadAnalytics = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const filters = {
+    year: yearNum,
+    semester: semesterValue as "1" | "2" | "all",
+  };
 
-      // Get fresh token before making API calls
-      const token = await getAuthToken();
-      console.log("Fetching analytics data for:", { year: selectedYear, semester: selectedSemester });
-
-      // Convert year and semester to the format expected by the API
-      const yearNum = selectedYear === "all" ? undefined : parseInt(selectedYear);
-      const semesterValue = selectedSemester === "all" ? "all" : 
-                           selectedSemester === "spring" ? "1" : 
-                           selectedSemester === "summer" ? "2" : 
-                           selectedSemester === "fall" ? "3" : "all";
-
-      const filters = {
-        year: yearNum,
-        semester: semesterValue as "1" | "2" | "all"
-      };
-
-      // Fetch all analytics data from API
-      const [metricsData, trendsData, typesData, ratesData] = await Promise.all([
-        analyticsApi.getMetrics(token, filters),
-        analyticsApi.getSubmissionTrends(token, filters, "month"),
-        analyticsApi.getProjectTypeDistribution(token, filters),
-        analyticsApi.getApprovalRates(token, filters),
-      ]);
-
-      console.log("Analytics data loaded:", { metricsData, trendsData, typesData, ratesData });
-
-      setMetrics(metricsData);
-      setTrends(trendsData);
-      setProjectTypes(typesData);
-      setApprovalRates(ratesData);
-    } catch (err: any) {
-      console.error("Failed to load analytics:", err);
-      const errorMessage = err.message || "Failed to load analytics data";
-      setError(errorMessage);
-      
-      // If authentication error, suggest re-login
-      if (errorMessage.includes("authenticated") || errorMessage.includes("token")) {
-        setError("Your session has expired. Please logout and login again.");
+  const analyticsQuery = useQuery({
+    queryKey: ["analytics-report", user.id, user.role, selectedYear, selectedSemester],
+    enabled: user.role === "coordinator" && !!user.id,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000, // Keep cached data for 10 minutes
+    retry: (failureCount, error: any) => {
+      // Don't retry on auth errors
+      if (error?.message?.includes("authenticated") || error?.message?.includes("token")) {
+        return false;
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+      return failureCount < 2;
+    },
+    queryFn: async () => {
+      try {
+        const token = await getAuthToken();
+
+        const [metricsData, trendsData, typesData, ratesData] = await Promise.all([
+          analyticsApi.getMetrics(token, filters),
+          analyticsApi.getSubmissionTrends(token, filters, "month"),
+          analyticsApi.getProjectTypeDistribution(token, filters),
+          analyticsApi.getApprovalRates(token, filters),
+        ]);
+
+        return { metricsData, trendsData, typesData, ratesData };
+      } catch (error) {
+        console.error("Error fetching analytics:", error);
+        throw error;
+      }
+    },
+  });
+
+  const metrics = analyticsQuery.data?.metricsData ?? null;
+  const trends = analyticsQuery.data?.trendsData ?? [];
+  const projectTypes = analyticsQuery.data?.typesData ?? [];
+  const approvalRates = analyticsQuery.data?.ratesData ?? [];
 
   const handleExport = async () => {
     try {
       // Get fresh token before export
       const token = await getAuthToken();
       
-      const yearNum = selectedYear === "all" ? undefined : parseInt(selectedYear);
-      const semesterValue = selectedSemester === "all" ? "all" : 
-                           selectedSemester === "spring" ? "1" : 
-                           selectedSemester === "summer" ? "2" : 
-                           selectedSemester === "fall" ? "3" : "all";
-
-      const filters = {
+      const exportFilters = {
         year: yearNum,
         semester: semesterValue as "1" | "2" | "all"
       };
 
-      const blob = await analyticsApi.exportData(token, filters, "csv");
+      const blob = await analyticsApi.exportData(token, exportFilters, "csv");
       
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -125,7 +111,10 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
       document.body.removeChild(a);
     } catch (err: any) {
       console.error("Failed to export report:", err);
-      alert("Failed to export report. Please try logging in again.");
+      const errorMsg = err?.message?.includes("authenticated") 
+        ? "Your session has expired. Please logout and login again."
+        : "Failed to export report. Please try again.";
+      alert(errorMsg);
     }
   };
 
@@ -140,7 +129,7 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
     );
   }
 
-  if (loading) {
+  if (analyticsQuery.isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
@@ -149,12 +138,23 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
     );
   }
 
-  if (error) {
+  if (analyticsQuery.error) {
+    const errorMessage =
+      analyticsQuery.error instanceof Error
+        ? analyticsQuery.error.message
+        : "Failed to load analytics data";
+    const displayMessage =
+      errorMessage.includes("authenticated") || errorMessage.includes("token")
+        ? "Your session has expired. Please logout and login again."
+        : errorMessage;
+
     return (
       <div className="text-center py-12">
         <div className="text-red-600 text-lg">Error Loading Analytics</div>
-        <p className="text-gray-500 mt-2">{error}</p>
-        <Button onClick={loadAnalytics} className="mt-4">Retry</Button>
+        <p className="text-gray-500 mt-2">{displayMessage}</p>
+        <Button onClick={() => void analyticsQuery.refetch()} className="mt-4">
+          Retry
+        </Button>
       </div>
     );
   }

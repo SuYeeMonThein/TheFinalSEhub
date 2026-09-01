@@ -91,15 +91,23 @@ export interface DetailedProject {
 
 class AnalyticsService {
   private async fetchWithAuth<T>(endpoint: string, token: string): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: buildAuthHeaders(token),
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        headers: buildAuthHeaders(token),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Analytics API error: ${response.statusText}`);
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("User not authenticated. Please log in again.");
+        }
+        throw new Error(`Analytics API error: ${response.status} ${response.statusText}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error(`Failed to fetch ${endpoint}:`, error);
+      throw error;
     }
-
-    return response.json();
   }
 
   async getMetrics(
