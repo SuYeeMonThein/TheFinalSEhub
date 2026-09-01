@@ -1,9 +1,41 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
-import { Download, TrendingUp, Award, Users, FileText, Loader2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+} from "recharts";
+import {
+  Download,
+  TrendingUp,
+  Award,
+  Users,
+  FileText,
+  Loader2,
+} from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { analyticsApi } from "@/services/analyticsApi";
@@ -24,16 +56,17 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
   const [selectedYear, setSelectedYear] = useState("2026");
   const [selectedSemester, setSelectedSemester] = useState("all");
 
-  // Reuse existing token; forcing refresh here can trigger auth change loops.
+  // Memoize the auth token getter to prevent unnecessary re-creation
   const getAuthToken = async (): Promise<string> => {
     const currentUser = auth.currentUser;
     if (!currentUser) {
       throw new Error("User not authenticated. Please log in again.");
     }
-    return await currentUser.getIdToken();
+    return await currentUser.getIdToken(false); // false = don't force refresh
   };
 
-  const yearNum = selectedYear === "all" ? undefined : parseInt(selectedYear, 10);
+  const yearNum =
+    selectedYear === "all" ? undefined : parseInt(selectedYear, 10);
   const semesterValue =
     selectedSemester === "all"
       ? "all"
@@ -51,23 +84,45 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
   };
 
   const analyticsQuery = useQuery({
-    queryKey: ["analytics-report", user.role, selectedYear, selectedSemester],
-    enabled: user.role === "coordinator",
+    queryKey: [
+      "analytics-report",
+      user.id,
+      user.role,
+      selectedYear,
+      selectedSemester,
+    ],
+    enabled: user.role === "coordinator" && !!user.id,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     staleTime: 5 * 60 * 1000,
-    retry: 1,
+    gcTime: 10 * 60 * 1000, // Keep cached data for 10 minutes
+    retry: (failureCount, error: any) => {
+      // Don't retry on auth errors
+      if (
+        error?.message?.includes("authenticated") ||
+        error?.message?.includes("token")
+      ) {
+        return false;
+      }
+      return failureCount < 2;
+    },
     queryFn: async () => {
-      const token = await getAuthToken();
+      try {
+        const token = await getAuthToken();
 
-      const [metricsData, trendsData, typesData, ratesData] = await Promise.all([
-        analyticsApi.getMetrics(token, filters),
-        analyticsApi.getSubmissionTrends(token, filters, "month"),
-        analyticsApi.getProjectTypeDistribution(token, filters),
-        analyticsApi.getApprovalRates(token, filters),
-      ]);
+        const [metricsData, trendsData, typesData, ratesData] =
+          await Promise.all([
+            analyticsApi.getMetrics(token, filters),
+            analyticsApi.getSubmissionTrends(token, filters, "month"),
+            analyticsApi.getProjectTypeDistribution(token, filters),
+            analyticsApi.getApprovalRates(token, filters),
+          ]);
 
-      return { metricsData, trendsData, typesData, ratesData };
+        return { metricsData, trendsData, typesData, ratesData };
+      } catch (error) {
+        console.error("Error fetching analytics:", error);
+        throw error;
+      }
     },
   });
 
@@ -80,23 +135,17 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
     try {
       // Get fresh token before export
       const token = await getAuthToken();
-      
-      const yearNum = selectedYear === "all" ? undefined : parseInt(selectedYear);
-      const semesterValue = selectedSemester === "all" ? "all" : 
-                           selectedSemester === "spring" ? "1" : 
-                           selectedSemester === "summer" ? "2" : 
-                           selectedSemester === "fall" ? "3" : "all";
 
-      const filters = {
+      const exportFilters = {
         year: yearNum,
-        semester: semesterValue as "1" | "2" | "all"
+        semester: semesterValue as "1" | "2" | "all",
       };
 
-      const blob = await analyticsApi.exportData(token, filters, "csv");
-      
+      const blob = await analyticsApi.exportData(token, exportFilters, "csv");
+
       // Create download link
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = `analytics-report-${selectedYear}-${selectedSemester}.csv`;
       document.body.appendChild(a);
@@ -105,7 +154,10 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
       document.body.removeChild(a);
     } catch (err: any) {
       console.error("Failed to export report:", err);
-      alert("Failed to export report. Please try logging in again.");
+      const errorMsg = err?.message?.includes("authenticated")
+        ? "Your session has expired. Please logout and login again."
+        : "Failed to export report. Please try again.";
+      alert(errorMsg);
     }
   };
 
@@ -124,7 +176,9 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-        <span className="ml-2 text-gray-600">Loading analytics from database...</span>
+        <span className="ml-2 text-gray-600">
+          Loading analytics from database...
+        </span>
       </div>
     );
   }
@@ -154,8 +208,12 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">Reports & Analytics</h2>
-          <p className="text-sm text-gray-500 mt-1">Real-time data from Supabase database</p>
+          <h2 className="text-3xl font-bold text-gray-900">
+            Reports & Analytics
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Real-time data from Supabase database
+          </p>
         </div>
         <Button onClick={handleExport}>
           <Download className="w-4 h-4 mr-2" />
@@ -196,24 +254,33 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Projects</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Projects
+            </CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics?.totalProjects || 0}</div>
+            <div className="text-2xl font-bold">
+              {metrics?.totalProjects || 0}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {metrics?.approvedProjects || 0} approved, {metrics?.pendingProjects || 0} pending
+              {metrics?.approvedProjects || 0} approved,{" "}
+              {metrics?.pendingProjects || 0} pending
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Students</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Active Students
+            </CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics?.totalStudents || 0}</div>
+            <div className="text-2xl font-bold">
+              {metrics?.totalStudents || 0}
+            </div>
             <p className="text-xs text-muted-foreground">
               Across {metrics?.totalProjects || 0} projects
             </p>
@@ -227,7 +294,9 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {metrics?.approvalRate ? `${metrics.approvalRate.toFixed(1)}%` : '0%'}
+              {metrics?.approvalRate
+                ? `${metrics.approvalRate.toFixed(1)}%`
+                : "0%"}
             </div>
             <p className="text-xs text-muted-foreground">
               {metrics?.rejectedProjects || 0} rejected
@@ -242,7 +311,9 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {metrics?.averageTeamSize ? metrics.averageTeamSize.toFixed(1) : '0'}
+              {metrics?.averageTeamSize
+                ? metrics.averageTeamSize.toFixed(1)
+                : "0"}
             </div>
             <p className="text-xs text-muted-foreground">
               students per project
@@ -269,7 +340,12 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
                   <XAxis dataKey="period" />
                   <YAxis />
                   <Tooltip />
-                  <Line type="monotone" dataKey="submissions" stroke="#8884d8" strokeWidth={2} />
+                  <Line
+                    type="monotone"
+                    dataKey="submissions"
+                    stroke="#8884d8"
+                    strokeWidth={2}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -303,8 +379,20 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
                     dataKey="value"
                   >
                     {projectTypes.map((entry, index) => {
-                      const colors = ["#8884d8", "#82ca9d", "#ffc658", "#ff7300", "#0088fe", "#a4de6c"];
-                      return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                      const colors = [
+                        "#8884d8",
+                        "#82ca9d",
+                        "#ffc658",
+                        "#ff7300",
+                        "#0088fe",
+                        "#a4de6c",
+                      ];
+                      return (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={colors[index % colors.length]}
+                        />
+                      );
                     })}
                   </Pie>
                   <Tooltip />
@@ -359,19 +447,29 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
             <div className="space-y-3">
               <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
                 <span className="font-medium text-green-900">Approved</span>
-                <Badge className="bg-green-600">{metrics?.approvedProjects || 0}</Badge>
+                <Badge className="bg-green-600">
+                  {metrics?.approvedProjects || 0}
+                </Badge>
               </div>
               <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
-                <span className="font-medium text-yellow-900">Pending Review</span>
-                <Badge className="bg-yellow-600">{metrics?.pendingProjects || 0}</Badge>
+                <span className="font-medium text-yellow-900">
+                  Pending Review
+                </span>
+                <Badge className="bg-yellow-600">
+                  {metrics?.pendingProjects || 0}
+                </Badge>
               </div>
               <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
                 <span className="font-medium text-red-900">Rejected</span>
-                <Badge className="bg-red-600">{metrics?.rejectedProjects || 0}</Badge>
+                <Badge className="bg-red-600">
+                  {metrics?.rejectedProjects || 0}
+                </Badge>
               </div>
               <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
                 <span className="font-medium text-blue-900">In Progress</span>
-                <Badge className="bg-blue-600">{metrics?.inProgressProjects || 0}</Badge>
+                <Badge className="bg-blue-600">
+                  {metrics?.inProgressProjects || 0}
+                </Badge>
               </div>
             </div>
           </CardContent>
@@ -384,7 +482,8 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
           <div className="flex items-center space-x-2 text-blue-900">
             <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
             <span className="text-sm font-medium">
-              Live data from Supabase database • Last updated: {new Date().toLocaleString()}
+              Live data from Supabase database • Last updated:{" "}
+              {new Date().toLocaleString()}
             </span>
           </div>
         </CardContent>

@@ -1,6 +1,7 @@
 import { buildAuthHeaders } from "./authHeaders";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 export interface AnalyticsFilters {
   year?: number;
@@ -91,37 +92,48 @@ export interface DetailedProject {
 
 class AnalyticsService {
   private async fetchWithAuth<T>(endpoint: string, token: string): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: buildAuthHeaders(token),
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        headers: buildAuthHeaders(token),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Analytics API error: ${response.statusText}`);
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("User not authenticated. Please log in again.");
+        }
+        throw new Error(
+          `Analytics API error: ${response.status} ${response.statusText}`,
+        );
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error(`Failed to fetch ${endpoint}:`, error);
+      throw error;
     }
-
-    return response.json();
   }
 
   async getMetrics(
     token: string,
-    filters: AnalyticsFilters = {}
+    filters: AnalyticsFilters = {},
   ): Promise<ProjectMetrics> {
     const params = new URLSearchParams();
     if (filters.year) params.append("year", filters.year.toString());
     if (filters.semester) params.append("semester", filters.semester);
-    if (filters.courseId) params.append("courseId", filters.courseId.toString());
+    if (filters.courseId)
+      params.append("courseId", filters.courseId.toString());
 
     const query = params.toString();
     return this.fetchWithAuth<ProjectMetrics>(
       `/analytics/metrics${query ? `?${query}` : ""}`,
-      token
+      token,
     );
   }
 
   async getSubmissionTrends(
     token: string,
     filters: AnalyticsFilters = {},
-    groupBy: "month" | "semester" | "year" = "month"
+    groupBy: "month" | "semester" | "year" = "month",
   ): Promise<SubmissionTrend[]> {
     const params = new URLSearchParams();
     if (filters.year) params.append("year", filters.year.toString());
@@ -131,13 +143,13 @@ class AnalyticsService {
     const query = params.toString();
     return this.fetchWithAuth<SubmissionTrend[]>(
       `/analytics/trends${query ? `?${query}` : ""}`,
-      token
+      token,
     );
   }
 
   async getProjectTypeDistribution(
     token: string,
-    filters: AnalyticsFilters = {}
+    filters: AnalyticsFilters = {},
   ): Promise<ProjectTypeDistribution[]> {
     const params = new URLSearchParams();
     if (filters.year) params.append("year", filters.year.toString());
@@ -146,13 +158,13 @@ class AnalyticsService {
     const query = params.toString();
     return this.fetchWithAuth<ProjectTypeDistribution[]>(
       `/analytics/project-types${query ? `?${query}` : ""}`,
-      token
+      token,
     );
   }
 
   async getApprovalRates(
     token: string,
-    filters: AnalyticsFilters = {}
+    filters: AnalyticsFilters = {},
   ): Promise<ApprovalRate[]> {
     const params = new URLSearchParams();
     if (filters.year) params.append("year", filters.year.toString());
@@ -160,14 +172,14 @@ class AnalyticsService {
     const query = params.toString();
     return this.fetchWithAuth<ApprovalRate[]>(
       `/analytics/approval-rates${query ? `?${query}` : ""}`,
-      token
+      token,
     );
   }
 
   async getStudentPerformance(
     token: string,
     filters: AnalyticsFilters = {},
-    limit: number = 50
+    limit: number = 50,
   ): Promise<StudentPerformance[]> {
     const params = new URLSearchParams();
     if (filters.year) params.append("year", filters.year.toString());
@@ -177,13 +189,13 @@ class AnalyticsService {
     const query = params.toString();
     return this.fetchWithAuth<StudentPerformance[]>(
       `/analytics/students${query ? `?${query}` : ""}`,
-      token
+      token,
     );
   }
 
   async getAdvisorPerformance(
     token: string,
-    filters: AnalyticsFilters = {}
+    filters: AnalyticsFilters = {},
   ): Promise<AdvisorPerformance[]> {
     const params = new URLSearchParams();
     if (filters.year) params.append("year", filters.year.toString());
@@ -192,13 +204,13 @@ class AnalyticsService {
     const query = params.toString();
     return this.fetchWithAuth<AdvisorPerformance[]>(
       `/analytics/advisors${query ? `?${query}` : ""}`,
-      token
+      token,
     );
   }
 
   async getCourseAnalytics(
     token: string,
-    filters: AnalyticsFilters = {}
+    filters: AnalyticsFilters = {},
   ): Promise<CourseAnalytics[]> {
     const params = new URLSearchParams();
     if (filters.year) params.append("year", filters.year.toString());
@@ -207,13 +219,13 @@ class AnalyticsService {
     const query = params.toString();
     return this.fetchWithAuth<CourseAnalytics[]>(
       `/analytics/courses${query ? `?${query}` : ""}`,
-      token
+      token,
     );
   }
 
   async getImpactAnalysis(
     token: string,
-    filters: AnalyticsFilters = {}
+    filters: AnalyticsFilters = {},
   ): Promise<ImpactAnalysis[]> {
     const params = new URLSearchParams();
     if (filters.year) params.append("year", filters.year.toString());
@@ -222,19 +234,20 @@ class AnalyticsService {
     const query = params.toString();
     return this.fetchWithAuth<ImpactAnalysis[]>(
       `/analytics/impact${query ? `?${query}` : ""}`,
-      token
+      token,
     );
   }
 
   async exportData(
     token: string,
     filters: AnalyticsFilters = {},
-    format: "json" | "csv" = "csv"
+    format: "json" | "csv" = "csv",
   ): Promise<Blob> {
     const params = new URLSearchParams();
     if (filters.year) params.append("year", filters.year.toString());
     if (filters.semester) params.append("semester", filters.semester);
-    if (filters.courseId) params.append("courseId", filters.courseId.toString());
+    if (filters.courseId)
+      params.append("courseId", filters.courseId.toString());
     params.append("format", format);
 
     const query = params.toString();
@@ -242,7 +255,7 @@ class AnalyticsService {
       `${API_BASE_URL}/analytics/export${query ? `?${query}` : ""}`,
       {
         headers: buildAuthHeaders(token),
-      }
+      },
     );
 
     if (!response.ok) {
@@ -254,17 +267,18 @@ class AnalyticsService {
 
   async getDetailedProjects(
     token: string,
-    filters: AnalyticsFilters = {}
+    filters: AnalyticsFilters = {},
   ): Promise<DetailedProject[]> {
     const params = new URLSearchParams();
     if (filters.year) params.append("year", filters.year.toString());
     if (filters.semester) params.append("semester", filters.semester);
-    if (filters.courseId) params.append("courseId", filters.courseId.toString());
+    if (filters.courseId)
+      params.append("courseId", filters.courseId.toString());
 
     const query = params.toString();
     return this.fetchWithAuth<DetailedProject[]>(
       `/analytics/export${query ? `?${query}` : ""}`,
-      token
+      token,
     );
   }
 }
