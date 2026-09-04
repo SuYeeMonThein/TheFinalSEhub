@@ -194,6 +194,25 @@ export const fetchArchiveProjects = async (
   return body.projects;
 };
 
+export const deleteProject = async (
+  projectId: number,
+  token: string,
+): Promise<void> => {
+  const response = await fetch(buildUrl(`/projects/${projectId}`), {
+    method: "DELETE",
+    headers: buildAuthHeaders(token),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const message =
+      body && typeof body === "object" && "error" in body
+        ? (body as { error: string }).error
+        : "Failed to delete project.";
+    throw new ApiError(message, response.status, body);
+  }
+};
+
 export const submitProject = async (
   payload: CreateProjectPayload,
   token: string,

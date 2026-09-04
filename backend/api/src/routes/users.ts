@@ -876,38 +876,44 @@ usersRouter.delete(
 
     const supabase = getSupabaseAdminClient();
 
-    if (existingUser.role === "student") {
-      const teamCleanup = await supabase
-        .from("team_member")
-        .delete()
-        .eq("student_id", numericId);
+    const teamCleanup = await supabase
+      .from("team_member")
+      .delete()
+      .eq("student_id", numericId);
 
-      if (teamCleanup.error) {
-        res.status(500).json({ error: teamCleanup.error.message });
-        return;
-      }
+    if (teamCleanup.error) {
+      res.status(500).json({ error: teamCleanup.error.message });
+      return;
     }
 
-    if (existingUser.role === "advisor") {
-      const projectCleanup = await supabase
-        .from("project")
-        .update({ advisor_id: null })
-        .eq("advisor_id", numericId);
+    const projectCleanup = await supabase
+      .from("project")
+      .update({ advisor_id: null })
+      .eq("advisor_id", numericId);
 
-      if (projectCleanup.error) {
-        res.status(500).json({ error: projectCleanup.error.message });
-        return;
-      }
+    if (projectCleanup.error) {
+      res.status(500).json({ error: projectCleanup.error.message });
+      return;
+    }
 
-      const courseCleanup = await supabase
-        .from("course")
-        .update({ advisor_id: null })
-        .eq("advisor_id", numericId);
+    const courseCleanup = await supabase
+      .from("course")
+      .update({ advisor_id: null })
+      .eq("advisor_id", numericId);
 
-      if (courseCleanup.error) {
-        res.status(500).json({ error: courseCleanup.error.message });
-        return;
-      }
+    if (courseCleanup.error) {
+      res.status(500).json({ error: courseCleanup.error.message });
+      return;
+    }
+
+    const commentCleanup = await supabase
+      .from("project_comment")
+      .delete()
+      .eq("user_id", numericId);
+
+    if (commentCleanup.error) {
+      res.status(500).json({ error: commentCleanup.error.message });
+      return;
     }
 
     const deleteResult = await deleteUserById(numericId);

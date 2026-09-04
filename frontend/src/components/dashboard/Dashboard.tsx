@@ -52,8 +52,11 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
     refetch: refetchProjects,
   } = useProjects(authToken);
 
-  const { data: archiveProjects = [], isLoading: archiveLoading } =
-    useArchiveProjects(authToken);
+  const {
+    data: archiveProjects = [],
+    isLoading: archiveLoading,
+    refetch: refetchArchiveProjects,
+  } = useArchiveProjects(authToken);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -232,9 +235,11 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
         return (
           <ProjectArchive
             user={user}
+            authToken={authToken}
             projects={archiveProjects}
             isLoading={archiveLoading}
             onViewProject={(id) => handleProjectSelection(id, "archive")}
+            onProjectDeleted={() => void refetchArchiveProjects()}
           />
         );
       case "users":

@@ -451,11 +451,27 @@ coursesRouter.delete(
 
     const { courseId } = req.params;
     const supabase = getSupabaseAdminClient();
+    const parsedCourseId = Number(courseId);
+
+    if (!Number.isInteger(parsedCourseId) || parsedCourseId <= 0) {
+      res.status(400).json({ error: "Invalid course identifier." });
+      return;
+    }
+
+    const projectCleanup = await supabase
+      .from("project")
+      .update({ course_id: null })
+      .eq("course_id", parsedCourseId);
+
+    if (projectCleanup.error) {
+      res.status(500).json({ error: projectCleanup.error.message });
+      return;
+    }
 
     const { error } = await supabase
       .from("course")
       .delete()
-      .eq("id", parseInt(courseId));
+      .eq("id", parsedCourseId);
 
     if (error) {
       res.status(500).json({ error: error.message });

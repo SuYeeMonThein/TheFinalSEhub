@@ -25,6 +25,7 @@ import {
   Grid,
   List,
   Award,
+  Trash2,
 } from "lucide-react";
 import {
   Table,
@@ -35,7 +36,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import type { ProjectDto } from "@/services/projectApi";
+import { deleteProject, type ProjectDto } from "@/services/projectApi";
+import { useToast } from "@/hooks/use-toast";
 
 interface User {
   id: string;
@@ -47,6 +49,8 @@ interface User {
 interface ProjectArchiveProps {
   user: User;
   onViewProject: (projectId: string) => void;
+  authToken: string | null;
+  onProjectDeleted: () => void;
   projects?: ProjectDto[];
   isLoading?: boolean;
 }
@@ -54,6 +58,8 @@ interface ProjectArchiveProps {
 export const ProjectArchive = ({
   user,
   onViewProject,
+  authToken,
+  onProjectDeleted,
   projects,
   isLoading = false,
 }: ProjectArchiveProps) => {
@@ -62,6 +68,36 @@ export const ProjectArchive = ({
   const [yearFilter, setYearFilter] = useState("all");
   const [semesterFilter, setSemesterFilter] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [deletingProjectId, setDeletingProjectId] = useState<number | null>(
+    null,
+  );
+  const { toast } = useToast();
+
+  const handleDeleteProject = async (project: ProjectDto) => {
+    if (!authToken || deletingProjectId !== null) return;
+
+    if (!window.confirm(`Delete "${project.title}" permanently?`)) return;
+
+    setDeletingProjectId(project.id);
+
+    try {
+      await deleteProject(project.id, authToken);
+      onProjectDeleted();
+      toast({
+        title: "Project deleted",
+        description: "The project was removed from the archive.",
+      });
+    } catch (error) {
+      toast({
+        title: "Unable to delete project",
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingProjectId(null);
+    }
+  };
 
   const availableProjects = useMemo(() => {
     const curated = (projects ?? []).filter((project) => {
@@ -299,6 +335,18 @@ export const ProjectArchive = ({
                       <Eye className="w-4 h-4 mr-2" />
                       View Details
                     </Button>
+                    {user.role === "coordinator" && (
+                      <Button
+                        onClick={() => void handleDeleteProject(project)}
+                        size="sm"
+                        variant="outline"
+                        disabled={deletingProjectId === project.id}
+                        className="text-red-600 hover:text-red-700"
+                        title="Delete project"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -409,14 +457,28 @@ export const ProjectArchive = ({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        onClick={() => onViewProject(projectId)}
-                        size="sm"
-                        variant="outline"
-                      >
-                        <Eye className="w-4 h-4 mr-2" />
-                        View
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          onClick={() => onViewProject(projectId)}
+                          size="sm"
+                          variant="outline"
+                        >
+                          <Eye className="w-4 h-4 mr-2" />
+                          View
+                        </Button>
+                        {user.role === "coordinator" && (
+                          <Button
+                            onClick={() => void handleDeleteProject(project)}
+                            size="sm"
+                            variant="outline"
+                            disabled={deletingProjectId === project.id}
+                            className="text-red-600 hover:text-red-700"
+                            title="Delete project"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

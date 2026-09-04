@@ -1681,6 +1681,75 @@ projectsRouter.get(
 );
 
 /* ------------------------------------------------------------------ */
+/*  PROJECT DELETE — DELETE /projects/:id                             */
+/* ------------------------------------------------------------------ */
+
+projectsRouter.delete(
+  "/:id",
+  verifyFirebaseAuth,
+  async (req: AuthedRequest, res: Response) => {
+    if (req.user?.role !== "coordinator") {
+      res.status(403).json({ error: "Only coordinators can delete projects." });
+      return;
+    }
+
+    const projectId = Number(req.params.id);
+
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      res.status(400).json({ error: "Invalid project id." });
+      return;
+    }
+
+    const supabase = getSupabaseAdminClient();
+    const { data: fileRows, error: fileLookupError } = await supabase
+      .from("file")
+      .select("file_link")
+      .eq("project_id", projectId);
+
+    if (fileLookupError) {
+      res.status(500).json({ error: fileLookupError.message });
+      return;
+    }
+
+    const teamCleanup = await supabase
+      .from("team_member")
+      .delete()
+      .eq("project_id", projectId);
+
+    if (teamCleanup.error) {
+      res.status(500).json({ error: teamCleanup.error.message });
+      return;
+    }
+
+    const { data: deletedProjects, error: deleteError } = await supabase
+      .from("project")
+      .delete()
+      .eq("id", projectId)
+      .select("id");
+
+    if (deleteError) {
+      res.status(500).json({ error: deleteError.message });
+      return;
+    }
+
+    if (!deletedProjects || deletedProjects.length === 0) {
+      res.status(404).json({ error: "Project not found." });
+      return;
+    }
+
+    await Promise.all(
+      (fileRows ?? []).map((row) =>
+        deleteFile(row.file_link).catch((error) => {
+          console.warn("Failed to remove project file from storage:", error);
+        }),
+      ),
+    );
+
+    res.status(204).send();
+  },
+);
+
+/* ------------------------------------------------------------------ */
 /*  FILE DELETE — DELETE /projects/:id/files/:filename                */
 /* ------------------------------------------------------------------ */
 
