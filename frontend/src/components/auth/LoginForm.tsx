@@ -272,7 +272,10 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     setSuccessMessage(null);
 
     try {
-      await sendPasswordResetEmail(auth, normalizedEmail);
+      await sendPasswordResetEmail(auth, normalizedEmail, {
+        url: `${window.location.origin}/`,
+        handleCodeInApp: false,
+      });
       setSuccessMessage("Password reset email sent. Please check your inbox.");
     } catch (error) {
       console.error("Password reset error:", error);
@@ -412,7 +415,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                 type="button"
                 onClick={handleForgotPassword}
                 disabled={isResettingPassword}
-                className="text-sm text-[#06402B] hover:underline disabled:opacity-50"
+                className="text-sm font-medium text-[#06402B] underline-offset-4 transition-colors hover:text-[#0B6D57] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isResettingPassword ? "Sending..." : "Forgot password?"}
               </button>
