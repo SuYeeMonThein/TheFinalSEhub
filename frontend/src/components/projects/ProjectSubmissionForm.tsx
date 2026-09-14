@@ -185,7 +185,6 @@ export const ProjectSubmissionForm = ({
     buildSubmitterMember(),
   ]);
   const [newTeamMember, setNewTeamMember] = useState({
-    name: "",
     email: "",
     role: "student" as "student" | "lecturer",
   });
@@ -324,7 +323,7 @@ export const ProjectSubmissionForm = ({
       setPendingFiles([]);
       setNewKeyword("");
       setNewLink("");
-      setNewTeamMember({ name: "", email: "", role: "student" });
+      setNewTeamMember({ email: "", role: "student" });
       onBack();
     },
     onError: (error) => {
@@ -541,10 +540,10 @@ export const ProjectSubmissionForm = ({
   };
 
   const addTeamMember = () => {
-    if (!newTeamMember.name.trim() || !newTeamMember.email.trim()) {
+    if (!newTeamMember.email.trim()) {
       toast({
         title: "Error",
-        description: "Please fill in team member name and email",
+        description: "Please enter a team member email",
         variant: "destructive",
       });
       return;
@@ -566,16 +565,19 @@ export const ProjectSubmissionForm = ({
       return;
     }
 
+    const trimmedEmail = newTeamMember.email.trim();
     const newMember: TeamMember = {
       id: nanoid(),
-      name: newTeamMember.name.trim(),
-      email: newTeamMember.email.trim(),
+      // The real name is resolved server-side from this email once saved;
+      // the email is shown here as a placeholder in the meantime.
+      name: trimmedEmail,
+      email: trimmedEmail,
       role: newTeamMember.role,
       isPrimary: false,
     };
 
     setTeamMembers((prev) => [...prev, newMember]);
-    setNewTeamMember({ name: "", email: "", role: "student" });
+    setNewTeamMember({ email: "", role: "student" });
   };
 
   const removeTeamMember = (id: string) => {
@@ -1068,23 +1070,7 @@ export const ProjectSubmissionForm = ({
             <div>
               <Label>Team Members</Label>
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                  <Input
-                    value={newTeamMember.name}
-                    onChange={(e) =>
-                      setNewTeamMember((prev) => ({
-                        ...prev,
-                        name: e.target.value,
-                      }))
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addTeamMember();
-                      }
-                    }}
-                    placeholder="Member name"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <Input
                     value={newTeamMember.email}
                     onChange={(e) =>
@@ -1150,10 +1136,18 @@ export const ProjectSubmissionForm = ({
                               <User className="w-4 h-4 text-muted-foreground" />
                             )}
                             <div>
-                              <p className="font-medium">{member.name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {member.email}
-                              </p>
+                              {member.name &&
+                              member.name.toLowerCase() !==
+                                member.email.toLowerCase() ? (
+                                <>
+                                  <p className="font-medium">{member.name}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {member.email}
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="font-medium">{member.email}</p>
+                              )}
                             </div>
                           </div>
                           <Badge

@@ -26,33 +26,6 @@ const Index = () => {
   const [isResolvingRoleAccess, setIsResolvingRoleAccess] = useState(false);
   const navigate = useNavigate();
 
-  // Load user from localStorage on component mount
-  useEffect(() => {
-    const savedUser = localStorage.getItem("user");
-    const savedToken = localStorage.getItem("authToken");
-    const isFirstLogin = localStorage.getItem("isFirstLogin") === "true";
-
-    if (savedUser) {
-      try {
-        const userData = JSON.parse(savedUser);
-        setUser(userData);
-
-        // Show password modal if first login
-        if (isFirstLogin) {
-          setShowPasswordModal(true);
-        }
-      } catch (error) {
-        console.error("Failed to parse saved user data:", error);
-        localStorage.removeItem("user");
-      }
-    }
-
-    if (savedToken) {
-      setAuthToken(savedToken);
-    }
-    setIsLoading(false);
-  }, []);
-
   useEffect(() => {
     if (!user || !authToken) {
       setCanChooseRole(false);
@@ -149,8 +122,20 @@ const Index = () => {
     };
   }, [authToken, user]);
 
-  // Keep Firebase ID token fresh and synced
+  // Establish the session from Firebase — the source of truth — rather than
+  // trusting whatever another account may have left behind in localStorage.
   useEffect(() => {
+    const clearSession = () => {
+      setAuthToken(null);
+      setUser(null);
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("firebaseAuthToken");
+      localStorage.removeItem("user");
+      localStorage.removeItem("currentView");
+      localStorage.removeItem("selectedProject");
+      localStorage.removeItem("editingProject");
+    };
+
     const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
@@ -158,31 +143,40 @@ const Index = () => {
           setAuthToken(fresh);
           localStorage.setItem("authToken", fresh);
           localStorage.setItem("firebaseAuthToken", fresh);
-          // Restore user from storage if present, but do not synthesize a new one here
-          if (!user) {
-            const stored = localStorage.getItem("user");
-            if (stored) {
-              try {
-                setUser(JSON.parse(stored));
-              } catch {
-                // ignore
+
+          // Only reuse a cached profile if it belongs to THIS Firebase
+          // account. A leftover profile from a previous person on this
+          // browser must never be shown as if it were the new signer-in's.
+          const stored = localStorage.getItem("user");
+          if (stored) {
+            try {
+              const storedUser = JSON.parse(stored);
+              if (storedUser?.id === firebaseUser.uid) {
+                setUser((current) => current ?? storedUser);
+                if (localStorage.getItem("isFirstLogin") === "true") {
+                  setShowPasswordModal(true);
+                }
+              } else {
+                localStorage.removeItem("user");
+                localStorage.removeItem("currentView");
+                localStorage.removeItem("selectedProject");
+                localStorage.removeItem("editingProject");
+                setUser(null);
               }
+            } catch {
+              localStorage.removeItem("user");
+              setUser(null);
             }
           }
         } catch (e) {
           console.warn("Failed to refresh Firebase ID token", e);
+          clearSession();
         }
       } else {
-        // Fully clear auth and user on sign-out/change
-        setAuthToken(null);
-        setUser(null);
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("firebaseAuthToken");
-        localStorage.removeItem("user");
-        localStorage.removeItem("currentView");
-        localStorage.removeItem("selectedProject");
-        localStorage.removeItem("editingProject");
+        // Nobody is signed in to Firebase — never show a cached dashboard.
+        clearSession();
       }
+      setIsLoading(false);
     });
 
     // Optional periodic refresh safeguard
@@ -200,7 +194,7 @@ const Index = () => {
       unsubscribe();
       clearInterval(refreshTimer);
     };
-  }, [user]);
+  }, []);
 
   const handleLogin = (
     userData: {

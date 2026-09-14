@@ -44,7 +44,6 @@ declare module "multer" {
 }
 
 declare module "bcryptjs";
-declare module "nodemailer";
 
 declare namespace Express {
   namespace Multer {
