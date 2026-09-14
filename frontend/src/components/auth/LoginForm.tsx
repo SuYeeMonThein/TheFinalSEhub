@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Mail, Loader2 } from "lucide-react";
 import {
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   AuthErrorCodes,
   isSignInWithEmailLink,
   signInWithEmailLink,
@@ -78,8 +79,10 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [isProcessingEmailLink, setIsProcessingEmailLink] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   // When we detect an email-link URL but don't have the email, ask for it
   const [pendingEmailLink, setPendingEmailLink] = useState(false);
   const [emailLinkEmail, setEmailLinkEmail] = useState("");
@@ -219,6 +222,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMessage(null);
+    setSuccessMessage(null);
     setIsSubmitting(true);
 
     try {
@@ -252,6 +256,31 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
       setErrorMessage(mapFirebaseError(error));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail) {
+      setErrorMessage("Please enter your email address first.");
+      return;
+    }
+
+    setIsResettingPassword(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      await sendPasswordResetEmail(auth, normalizedEmail);
+      setSuccessMessage("Password reset email sent. Please check your inbox.");
+    } catch (error) {
+      console.error("Password reset error:", error);
+      setErrorMessage(
+        "Unable to send the reset email. Please check your email address.",
+      );
+    } finally {
+      setIsResettingPassword(false);
     }
   };
 
@@ -378,9 +407,22 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                 autoComplete="current-password"
               />
             </div>
-            {errorMessage && (
-              <p className="text-sm text-red-600" role="alert">
-                {errorMessage}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={isResettingPassword}
+                className="text-sm text-[#06402B] hover:underline disabled:opacity-50"
+              >
+                {isResettingPassword ? "Sending..." : "Forgot password?"}
+              </button>
+            </div>
+            {(errorMessage || successMessage) && (
+              <p
+                className={`text-sm ${successMessage ? "text-green-600" : "text-red-600"}`}
+                role="alert"
+              >
+                {successMessage ?? errorMessage}
               </p>
             )}
             <Button
