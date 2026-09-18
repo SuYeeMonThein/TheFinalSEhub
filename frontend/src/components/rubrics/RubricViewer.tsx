@@ -209,16 +209,16 @@ export const RubricViewer = ({ user, authToken }: RubricViewerProps) => {
                   className="w-full text-left"
                 >
                   <CardHeader className="pb-3 cursor-pointer hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <CardTitle className="text-base flex items-center gap-2">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="flex flex-wrap items-center gap-2 text-base break-words">
                           {criterion.name}
                           <Badge variant="outline" className="text-xs">
                             Weight: {criterion.weight}%
                           </Badge>
                         </CardTitle>
                         {criterion.description && (
-                          <p className="text-sm text-gray-500 mt-1">{criterion.description}</p>
+                          <p className="mt-1 break-words text-sm text-gray-500">{criterion.description}</p>
                         )}
                         {criterion.ploIds.length > 0 && (
                           <div className="flex gap-1 mt-2">
@@ -231,9 +231,9 @@ export const RubricViewer = ({ user, authToken }: RubricViewerProps) => {
                         )}
                       </div>
                       {isExpanded ? (
-                        <ChevronUp className="w-5 h-5 text-gray-400 ml-4" />
+                        <ChevronUp className="w-5 h-5 shrink-0 text-gray-400" />
                       ) : (
-                        <ChevronDown className="w-5 h-5 text-gray-400 ml-4" />
+                        <ChevronDown className="w-5 h-5 shrink-0 text-gray-400" />
                       )}
                     </div>
                   </CardHeader>
@@ -241,7 +241,8 @@ export const RubricViewer = ({ user, authToken }: RubricViewerProps) => {
 
                 {isExpanded && criterion.levels.length > 0 && (
                   <CardContent className="pt-0">
-                    <Table>
+                    <div className="overflow-x-auto">
+                    <Table className="min-w-[520px]">
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-[140px]">Level</TableHead>
@@ -265,6 +266,7 @@ export const RubricViewer = ({ user, authToken }: RubricViewerProps) => {
                           ))}
                       </TableBody>
                     </Table>
+                    </div>
                   </CardContent>
                 )}
               </Card>

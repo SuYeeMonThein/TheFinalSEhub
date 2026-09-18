@@ -688,30 +688,30 @@ export const ProjectDetailView = ({
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center space-x-4">
           <Button onClick={onBack} variant="outline" size="sm">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-bold text-gray-900 break-words">
               {project.title}
             </h1>
             <p className="text-gray-600 mt-1">Project Details</p>
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex shrink-0 items-center space-x-2">
           <Badge className={getStatusColor(project.status)}>
             {getStatusDisplayName(project.status)}
           </Badge>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Left Column */}
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           {/* Project Overview */}
           <Card>
             <CardHeader>
@@ -966,13 +966,13 @@ export const ProjectDetailView = ({
         </div>
 
         {/* Right Column */}
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           {/* Project Details */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <CardTitle>Project Details</CardTitle>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {user.role === "student" && (
                     <Button
                       size="sm"
@@ -1212,8 +1212,8 @@ export const ProjectDetailView = ({
               <CardContent className="space-y-4">
                 {/* Conversation Summary */}
                 {comments.length > 0 && (
-                  <div className="flex items-center justify-between pb-2 border-b">
-                    <div className="flex items-center space-x-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b">
+                    <div className="flex min-w-0 items-center space-x-2">
                       <MessageSquare className="w-4 h-4 text-blue-600" />
                       <span className="text-sm font-medium text-gray-700">
                         {comments.length}{" "}
@@ -1221,7 +1221,7 @@ export const ProjectDetailView = ({
                         conversation
                       </span>
                     </div>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-gray-500 break-words">
                       Last updated{" "}
                       {formatCommentTime(
                         comments[comments.length - 1]?.created_at,

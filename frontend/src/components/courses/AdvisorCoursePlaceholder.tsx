@@ -627,7 +627,8 @@ export const AdvisorCoursePlaceholder = ({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+          <div className="overflow-x-auto">
+          <Table className="min-w-[720px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Course</TableHead>
@@ -679,6 +680,7 @@ export const AdvisorCoursePlaceholder = ({
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -712,7 +714,7 @@ export const AdvisorCoursePlaceholder = ({
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-sm text-muted-foreground">
                   {selectedStudentIds.size} selected
                 </div>
@@ -731,7 +733,8 @@ export const AdvisorCoursePlaceholder = ({
                 </Button>
               </div>
 
-              <div className="max-h-[420px] overflow-auto">
+                <div className="max-h-[420px] overflow-auto">
+                  <div className="min-w-[720px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -783,7 +786,8 @@ export const AdvisorCoursePlaceholder = ({
                       </TableRow>
                     ))}
                   </TableBody>
-                </Table>
+                  </Table>
+                  </div>
               </div>
             </div>
           )}

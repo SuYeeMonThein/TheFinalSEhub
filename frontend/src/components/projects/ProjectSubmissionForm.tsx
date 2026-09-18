@@ -1328,24 +1328,16 @@ export const ProjectSubmissionForm = ({
                     type="button"
                     variant="outline"
                     onClick={onBack}
-                    disabled={projectMutation.isPending}
+                    disabled={updateMutation.isPending}
                   >
                     Cancel
                   </Button>
                   <Button
                     type="button"
-                    variant="outline"
-                    onClick={(e) => handleSubmit(e, true)}
-                    disabled={projectMutation.isPending}
-                  >
-                    {projectMutation.isPending ? "Saving..." : "Save Draft"}
-                  </Button>
-                  <Button
-                    type="button"
                     onClick={(e) => handleSubmit(e, false)}
-                    disabled={projectMutation.isPending}
+                    disabled={updateMutation.isPending}
                   >
-                    {projectMutation.isPending
+                    {updateMutation.isPending
                       ? "Submitting..."
                       : "Submit for Review"}
                   </Button>

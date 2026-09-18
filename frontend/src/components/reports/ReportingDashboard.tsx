@@ -161,9 +161,9 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold text-gray-900">Reports & Analytics</h2>
+      <div className="flex flex-wrap justify-between items-center gap-3">
+        <div className="min-w-0">
+          <h2 className="text-3xl font-bold text-gray-900 break-words">Reports & Analytics</h2>
           <p className="text-sm text-gray-500 mt-1">Real-time data from Supabase database</p>
         </div>
         <Button onClick={handleExport}>
@@ -173,7 +173,7 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
       </div>
 
       {/* Filters */}
-      <div className="flex space-x-4">
+      <div className="flex flex-wrap gap-4">
         <Select value={selectedYear} onValueChange={setSelectedYear}>
           <SelectTrigger className="w-48">
             <SelectValue placeholder="Select academic year" />
@@ -203,7 +203,7 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
+        <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Projects</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
@@ -216,7 +216,7 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Students</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -229,7 +229,7 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Approval Rate</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -244,7 +244,7 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Avg Team Size</CardTitle>
             <Award className="h-4 w-4 text-muted-foreground" />
@@ -388,9 +388,9 @@ export const ReportingDashboard = ({ user }: ReportingDashboardProps) => {
       </div>
 
       {/* Data Source Info */}
-      <Card className="bg-blue-50 border-blue-200">
+      <Card className="min-w-0 bg-blue-50 border-blue-200">
         <CardContent className="pt-6">
-          <div className="flex items-center space-x-2 text-blue-900">
+          <div className="flex items-start gap-2 text-blue-900">
             <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
             <span className="text-sm font-medium">
               Live data from Supabase database • Last updated: {new Date().toLocaleString()}

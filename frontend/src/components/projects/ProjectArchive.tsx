@@ -134,9 +134,9 @@ export const ProjectArchive = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold text-gray-900">Project Archive</h2>
-        <div className="flex items-center gap-4">
+      <div className="flex flex-wrap justify-between items-center gap-3">
+        <h2 className="text-3xl font-bold text-gray-900 break-words">Project Archive</h2>
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
             <Button
               variant={viewMode === "grid" ? "default" : "outline"}
@@ -226,11 +226,11 @@ export const ProjectArchive = ({
             return (
               <Card
                 key={projectId}
-                className="hover:shadow-lg transition-shadow"
+                className="min-w-0 hover:shadow-lg transition-shadow"
               >
                 <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg line-clamp-2">
+                  <div className="flex min-w-0 justify-between items-start gap-2">
+                    <CardTitle className="min-w-0 text-lg line-clamp-2 break-words">
                       {project.title}
                     </CardTitle>
                     <Badge variant="outline" className="shrink-0 ml-2">
@@ -252,9 +252,9 @@ export const ProjectArchive = ({
 
                   {/* Project Details */}
                   <div className="space-y-2 text-sm text-gray-600">
-                    <div className="flex items-center">
-                      <User className="w-4 h-4 mr-2" />
-                      <span className="line-clamp-1">
+                    <div className="flex min-w-0 items-start">
+                      <User className="w-4 h-4 mr-2 shrink-0" />
+                      <span className="min-w-0 break-words line-clamp-2">
                         {project.students.join(", ")}
                       </span>
                     </div>
@@ -326,7 +326,7 @@ export const ProjectArchive = ({
                     )}
 
                   {/* Actions */}
-                  <div className="flex space-x-2">
+                  <div className="flex flex-wrap space-x-2 gap-y-2">
                     <Button
                       onClick={() => onViewProject(projectId)}
                       size="sm"
@@ -354,8 +354,8 @@ export const ProjectArchive = ({
           })}
         </div>
       ) : (
-        <div className="border rounded-lg">
-          <Table>
+        <div className="overflow-x-auto border rounded-lg">
+          <Table className="min-w-[900px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Project Title</TableHead>

@@ -16,9 +16,9 @@ interface HeaderProps {
 export const Header = ({ user, onLogout }: HeaderProps) => {
   return (
     <header className="bg-[#06402B] border-b border-[#043823] px-6 py-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-white break-words">
             Welcome back, {user.name}
           </h1>
           <p className="text-gray-200 capitalize">
@@ -26,10 +26,10 @@ export const Header = ({ user, onLogout }: HeaderProps) => {
           </p>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 text-sm text-gray-200">
+        <div className="flex min-w-0 flex-wrap items-center gap-4">
+          <div className="flex min-w-0 items-center space-x-2 text-sm text-gray-200">
             <User className="w-4 h-4" />
-            <span>{user.email}</span>
+            <span className="break-all">{user.email}</span>
           </div>
           <Button onClick={onLogout} variant="outline" size="sm">
             <LogOut className="w-4 h-4 mr-2" />

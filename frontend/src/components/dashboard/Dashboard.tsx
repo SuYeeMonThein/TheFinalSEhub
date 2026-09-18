@@ -287,9 +287,11 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
         currentView={currentView}
         onViewChange={handleViewChange}
       />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col">
         <Header user={user} onLogout={onLogout} />
-        <main className="flex-1 p-6">{renderContent()}</main>
+        <main className="flex-1 min-w-0 overflow-x-hidden p-6">
+          {renderContent()}
+        </main>
       </div>
     </div>
   );

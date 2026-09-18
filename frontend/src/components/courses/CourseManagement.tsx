@@ -930,7 +930,8 @@ export const CourseManagement = ({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
+            <div className="overflow-x-auto">
+            <Table className="min-w-[980px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Course Code</TableHead>
@@ -1000,6 +1001,7 @@ export const CourseManagement = ({
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       </div>
