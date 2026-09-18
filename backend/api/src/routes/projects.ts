@@ -320,7 +320,12 @@ const formatProjectResponse = (record: ProjectWithRelations) => {
       )
     : [];
 
-  const normalizeFileName = (name: string) => name.trim().toLowerCase();
+  const normalizeFileName = (name: string) =>
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "");
 
   // Build a lookup of cleaned filename → storagePath for files in the file table
   const fileTableByName = new Map<string, string>();

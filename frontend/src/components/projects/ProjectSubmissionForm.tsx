@@ -1298,15 +1298,16 @@ export const ProjectSubmissionForm = ({
                   {formData.files.map((file, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between bg-gray-50 p-2 rounded"
+                      className="flex min-w-0 items-center justify-between gap-2 bg-gray-50 p-2 rounded"
                     >
-                      <span className="text-sm">
+                      <span className="min-w-0 flex-1 break-all text-sm">
                         {file.name} ({file.size})
                       </span>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
+                        className="shrink-0"
                         disabled={removingFileName === file.name}
                         onClick={() => handleRemoveFile(file, index)}
                       >
