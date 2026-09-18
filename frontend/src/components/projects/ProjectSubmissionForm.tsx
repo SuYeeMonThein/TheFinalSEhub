@@ -72,6 +72,30 @@ interface ProjectSubmissionFormProps {
   onProjectCreated?: (project: ProjectDto) => void;
 }
 
+const normalizeProjectFileName = (name: string) =>
+  String(name ?? "").trim().toLowerCase();
+
+export const dedupeProjectFiles = <
+  T extends { name: string; pendingId?: string; storagePath?: string },
+>(existingFiles: T[], incomingFiles: T[]) => {
+  const mergedFiles = [...existingFiles, ...incomingFiles];
+  const dedupedFiles: T[] = [];
+  const seen = new Set<string>();
+
+  for (const file of mergedFiles) {
+    const normalizedName = normalizeProjectFileName(file.name);
+
+    if (!normalizedName || seen.has(normalizedName)) {
+      continue;
+    }
+
+    seen.add(normalizedName);
+    dedupedFiles.push(file);
+  }
+
+  return dedupedFiles;
+};
+
 const createInitialFormState = () => ({
   title: "",
   type: "",
@@ -238,7 +262,7 @@ export const ProjectSubmissionForm = ({
           teamName: projectToEdit.teamName || "",
           externalLinks: projectToEdit.externalLinks || [],
           completionDate: projectToEdit.completionDate || "",
-          files: projectToEdit.files || [],
+          files: dedupeProjectFiles(projectToEdit.files || [], []),
         }));
 
         // Load team members if available
@@ -439,6 +463,11 @@ export const ProjectSubmissionForm = ({
     if (!selectedFiles) return;
 
     const files = Array.from(selectedFiles);
+    const blockedNames = new Set([
+      ...formData.files.map((file) => normalizeProjectFileName(file.name)),
+      ...pendingFiles.map((entry) => normalizeProjectFileName(entry.file.name)),
+    ]);
+
     const validFiles = files.filter((file) => {
       const maxSize = 50 * 1024 * 1024; // 50MB
       const allowedTypes = [
@@ -450,7 +479,10 @@ export const ProjectSubmissionForm = ({
         "application/zip",
       ];
 
-      return file.size <= maxSize && allowedTypes.includes(file.type);
+      const isAllowed = file.size <= maxSize && allowedTypes.includes(file.type);
+      const isDuplicate = blockedNames.has(normalizeProjectFileName(file.name));
+
+      return isAllowed && !isDuplicate;
     });
 
     if (validFiles.length !== files.length) {
@@ -483,7 +515,7 @@ export const ProjectSubmissionForm = ({
 
     setFormData((prev) => ({
       ...prev,
-      files: [...prev.files, ...fileObjects],
+      files: dedupeProjectFiles(prev.files, fileObjects),
     }));
   };
 

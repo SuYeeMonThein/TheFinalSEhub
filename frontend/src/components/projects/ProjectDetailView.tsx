@@ -739,13 +739,15 @@ export const ProjectDetailView = ({
                 {project.files.map((file, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-3 border rounded-lg"
+                    className="flex items-center justify-between gap-3 p-3 border rounded-lg min-w-0"
                   >
-                    <div className="flex items-center space-x-3">
-                      <FileText className="w-8 h-8 text-gray-400" />
-                      <div>
-                        <p className="font-medium text-gray-900">{file.name}</p>
-                        <p className="text-sm text-gray-500">
+                    <div className="flex items-center space-x-3 min-w-0 flex-1">
+                      <FileText className="w-8 h-8 text-gray-400 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-gray-900 break-all">
+                          {file.name}
+                        </p>
+                        <p className="text-sm text-gray-500 break-all">
                           {file.size} • {file.type}
                           {file.downloadable === false && (
                             <span className="ml-2 text-amber-500">
@@ -758,6 +760,7 @@ export const ProjectDetailView = ({
                     <Button
                       size="sm"
                       variant="outline"
+                      className="shrink-0"
                       disabled={file.downloadable === false}
                       onClick={async () => {
                         if (file.downloadable === false) {
@@ -811,11 +814,11 @@ export const ProjectDetailView = ({
                 (project.externalLinks ?? []).map((link, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-3 border rounded-lg bg-gray-50"
+                    className="flex items-center justify-between gap-3 p-3 border rounded-lg bg-gray-50 min-w-0"
                   >
-                    <div className="flex items-center space-x-3">
-                      <ExternalLink className="w-5 h-5 text-blue-500" />
-                      <div>
+                    <div className="flex items-center space-x-3 min-w-0 flex-1">
+                      <ExternalLink className="w-5 h-5 text-blue-500 shrink-0" />
+                      <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-gray-900 break-all">
                           {link}
                         </p>
@@ -824,7 +827,7 @@ export const ProjectDetailView = ({
                         </p>
                       </div>
                     </div>
-                    <Button size="sm" variant="outline" asChild>
+                    <Button size="sm" variant="outline" asChild className="shrink-0">
                       <a href={link} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="w-4 h-4 mr-2" />
                         Open Link
