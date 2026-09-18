@@ -187,10 +187,10 @@ export const requireAdvisor: RequestHandler = (
 ) => {
   const role = parseRole(req.actingRole ?? req.user?.role);
 
-  if (role !== ADVISOR_ROLE) {
+  if (role !== ADVISOR_ROLE && role !== COORDINATOR_ROLE) {
     res
       .status(403)
-      .json({ error: "Forbidden", message: "Advisor role required." });
+      .json({ error: "Forbidden", message: "Advisor or coordinator role required." });
     return;
   }
 
