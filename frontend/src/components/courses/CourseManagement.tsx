@@ -319,11 +319,23 @@ export const CourseManagement = ({
   });
 
   const onSubmit = (data: CourseFormData) => {
+    const sanitizedData = {
+      ...data,
+      courseCode: data.courseCode?.trim() || "",
+      title: data.title?.trim() || "",
+      description: data.description?.trim() || "",
+      semester: data.semester === "null" ? "" : data.semester,
+      year: data.year === "null" ? "" : data.year,
+      credits: data.credits === "null" ? "" : data.credits,
+      instructor: data.instructor?.trim() || "",
+      advisorEmail: data.advisorEmail?.trim() || "",
+    };
+
     if (editingCourse) {
-      updateMutation.mutate(data);
+      updateMutation.mutate(sanitizedData);
       return;
     }
-    createMutation.mutate(data);
+    createMutation.mutate(sanitizedData);
   };
 
   const handleEdit = (course: Course) => {

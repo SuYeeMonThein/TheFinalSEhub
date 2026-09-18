@@ -37,6 +37,7 @@ CREATE INDEX user_roles_user_id_idx
 CREATE TABLE public.course (
   id SERIAL PRIMARY KEY,
   course_code VARCHAR NOT NULL,
+  title VARCHAR NOT NULL DEFAULT '',
   semester public.semester NOT NULL,
   year INT NOT NULL,
   credit public.course_credit NOT NULL,

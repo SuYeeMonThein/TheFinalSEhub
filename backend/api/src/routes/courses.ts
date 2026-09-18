@@ -20,6 +20,28 @@ import {
 
 const coursesRouter = Router();
 
+const parseNullableInt = (value: unknown): number | null => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? Math.trunc(value) : null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "" || trimmed.toLowerCase() === "null") {
+      return null;
+    }
+
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+  }
+
+  return null;
+};
+
 const DISPLAY_TYPE_MAP: Record<ProjectType, string> = {
   academic: "Capstone",
   competition: "Competition Work",
@@ -220,10 +242,12 @@ coursesRouter.post(
     }
 
     // Insert course
+    const finalTitle = (title || "").trim() || courseCode;
     const { data: course, error } = await supabase
       .from("course")
       .insert({
         course_code: courseCode,
+        title: finalTitle,
         semester: semester,
         year: parseInt(year),
         credit: credits.toString(),
@@ -241,7 +265,7 @@ coursesRouter.post(
       course: {
         id: course.id,
         courseCode: course.course_code,
-        title: title,
+        title: course.title || finalTitle,
         description: description || "",
         semester: course.semester,
         year: course.year.toString(),
@@ -303,6 +327,7 @@ coursesRouter.get(
       courses?.map((course) => ({
         id: course.id.toString(),
         courseCode: course.course_code,
+        title: course.title || course.course_code,
         semester: course.semester,
         year: course.year.toString(),
         credits: parseInt(course.credit),
@@ -347,6 +372,31 @@ coursesRouter.put(
       advisorEmail,
     } = req.body;
 
+    const yearValue = parseNullableInt(year);
+    const creditsValue = parseNullableInt(credits);
+
+    if (
+      year !== undefined &&
+      year !== null &&
+      String(year).trim() !== "" &&
+      String(year).trim().toLowerCase() !== "null" &&
+      yearValue === null
+    ) {
+      res.status(400).json({ error: "Invalid year value." });
+      return;
+    }
+
+    if (
+      credits !== undefined &&
+      credits !== null &&
+      String(credits).trim() !== "" &&
+      String(credits).trim().toLowerCase() !== "null" &&
+      creditsValue === null
+    ) {
+      res.status(400).json({ error: "Invalid credit value." });
+      return;
+    }
+
     const supabase = getSupabaseAdminClient();
 
     const { data: existingCourse, error: existingCourseError } = await supabase
@@ -386,7 +436,7 @@ coursesRouter.put(
       nextAdvisorId = advisorResponse.data.id;
       resolvedAdvisorName = advisorResponse.data.name;
       resolvedAdvisorEmail = advisorResponse.data.email;
-    } else {
+    } else if (existingCourse.advisor_id !== null) {
       const existingAdvisorResponse = await findUserById(
         existingCourse.advisor_id,
       );
@@ -401,15 +451,25 @@ coursesRouter.put(
       }
     }
 
+    const finalTitle = (title || "").trim() || courseCode;
+    const updatePayload: Record<string, unknown> = {
+      course_code: courseCode,
+      title: finalTitle,
+      semester,
+      advisor_id: nextAdvisorId,
+    };
+
+    if (yearValue !== null) {
+      updatePayload.year = yearValue;
+    }
+
+    if (creditsValue !== null) {
+      updatePayload.credit = String(creditsValue);
+    }
+
     const { data: course, error } = await supabase
       .from("course")
-      .update({
-        course_code: courseCode,
-        semester,
-        year: parseInt(year),
-        credit: credits.toString(),
-        advisor_id: nextAdvisorId,
-      })
+      .update(updatePayload)
       .eq("id", parsedCourseId)
       .select()
       .single();
@@ -423,7 +483,7 @@ coursesRouter.put(
       course: {
         id: course.id,
         courseCode: course.course_code,
-        title,
+        title: course.title || finalTitle,
         description: description || "",
         semester: course.semester,
         year: course.year.toString(),
