@@ -18,8 +18,10 @@ import {
   Award,
   Github,
   ExternalLink,
+  Trash2,
 } from "lucide-react";
-import type { ProjectDto } from "@/services/projectApi";
+import { deleteProject, type ProjectDto } from "@/services/projectApi";
+import { useToast } from "@/hooks/use-toast";
 
 
 interface User {
@@ -35,6 +37,7 @@ interface MyProjectsViewProps {
   isLoading?: boolean;
   onViewProject: (projectId: string) => void;
   onEditProject?: (projectId: string) => void;
+  onProjectDeleted: () => void;
   authToken?: string | null;
 }
 
@@ -147,8 +150,15 @@ export const MyProjectsView = ({
   projects: passedProjects,
   isLoading = false,
   onViewProject,
-  onEditProject,  authToken,}: MyProjectsViewProps) => {
+  onEditProject,
+  onProjectDeleted,
+  authToken,
+}: MyProjectsViewProps) => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [deletingProjectId, setDeletingProjectId] = useState<number | null>(
+    null,
+  );
+  const { toast } = useToast();
 
   const normalizeStatus = (status: ProjectDto["status"]) =>
     (status ?? "").toString().trim().toLowerCase();
@@ -198,6 +208,40 @@ export const MyProjectsView = ({
       return "Rejected";
     }
     return status ?? "";
+  };
+
+  const handleDeleteProject = async (project: ProjectDto) => {
+    if (!authToken || deletingProjectId !== null) return;
+
+    if (
+      !window.confirm(
+        `Delete "${project.title}" permanently? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+
+    setDeletingProjectId(project.id);
+
+    try {
+      await deleteProject(project.id, authToken);
+      onProjectDeleted();
+      toast({
+        title: "Project deleted",
+        description: "Your project was removed successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Unable to delete project",
+        description:
+          error instanceof Error
+            ? error.message
+            : "The project could not be deleted. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingProjectId(null);
+    }
   };
 
   const projectsToUse = useMemo(() => {
@@ -432,6 +476,19 @@ export const MyProjectsView = ({
                         Edit
                       </Button>
                     )}
+                  {user.role === "student" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleDeleteProject(project)}
+                      disabled={deletingProjectId === project.id}
+                      className="text-red-600 hover:text-red-700"
+                      title="Delete project"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -191,6 +191,7 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
             isLoading={projectsLoading}
             onViewProject={(id) => handleProjectSelection(id, "my-projects")}
             onEditProject={handleEditProject}
+            onProjectDeleted={() => void refetchProjects()}
             authToken={authToken}
           />
         );
@@ -274,6 +275,7 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
             isLoading={projectsLoading}
             onViewProject={(id) => handleProjectSelection(id, "my-projects")}
             onEditProject={handleEditProject}
+            onProjectDeleted={() => void refetchProjects()}
             authToken={authToken}
           />
         );

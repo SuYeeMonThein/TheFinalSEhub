@@ -1693,11 +1693,6 @@ projectsRouter.delete(
   "/:id",
   verifyFirebaseAuth,
   async (req: AuthedRequest, res: Response) => {
-    if (req.user?.role !== "coordinator") {
-      res.status(403).json({ error: "Only coordinators can delete projects." });
-      return;
-    }
-
     const projectId = Number(req.params.id);
 
     if (!Number.isInteger(projectId) || projectId <= 0) {
@@ -1706,6 +1701,62 @@ projectsRouter.delete(
     }
 
     const supabase = getSupabaseAdminClient();
+    const role = req.user?.role;
+    if (role !== "coordinator" && role !== "student") {
+      res.status(403).json({ error: "Only project members can delete projects." });
+      return;
+    }
+
+    const projectResult = await getProjectById(projectId);
+    if (projectResult.error) {
+      res.status(500).json({ error: projectResult.error.message });
+      return;
+    }
+
+    if (!projectResult.data?.[0]) {
+      res.status(404).json({ error: "Project not found." });
+      return;
+    }
+
+    if (role === "student") {
+      const requesterEmail = req.user?.email;
+      if (!requesterEmail) {
+        res.status(400).json({
+          error: "Email address missing from authentication token.",
+        });
+        return;
+      }
+
+      const requesterLookup = await findUserByEmail(requesterEmail);
+      if (requesterLookup.error) {
+        res.status(500).json({ error: requesterLookup.error.message });
+        return;
+      }
+
+      const requester = requesterLookup.data;
+      if (!requester) {
+        res.status(404).json({ error: "User record not found." });
+        return;
+      }
+
+      const membership = await supabase
+        .from("team_member")
+        .select("project_id")
+        .eq("project_id", projectId)
+        .eq("student_id", requester.id)
+        .maybeSingle();
+
+      if (membership.error) {
+        res.status(500).json({ error: membership.error.message });
+        return;
+      }
+
+      if (!membership.data) {
+        res.status(403).json({ error: "You are not a member of this project." });
+        return;
+      }
+    }
+
     const { data: fileRows, error: fileLookupError } = await supabase
       .from("file")
       .select("file_link")
