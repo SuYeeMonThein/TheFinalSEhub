@@ -259,7 +259,7 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
       case "reports":
         return <ReportingDashboard user={user} />;
       case "rubrics":
-        return user.role === "advisor" ? (
+        return user.role === "advisor" || user.role === "coordinator" ? (
           <RubricManagement user={user} authToken={authToken} />
         ) : (
           <RubricViewer user={user} authToken={authToken} />
