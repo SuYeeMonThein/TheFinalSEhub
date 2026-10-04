@@ -152,6 +152,22 @@ export const fetchCourseProjects = async (
   return body?.projects || [];
 };
 
+export const fetchCourseAdvisorByCode = async (
+  courseCode: string,
+  token: string,
+): Promise<{ name: string; email: string } | null> => {
+  const response = await fetch(
+    buildUrl(`/courses/advisor-by-code/${encodeURIComponent(courseCode)}`),
+    { headers: buildAuthHeaders(token) },
+  );
+
+  const body = await handleJsonResponse<{
+    advisor?: { name: string; email: string } | null;
+  }>(response);
+
+  return body?.advisor ?? null;
+};
+
 // --- Roster APIs ---
 
 export interface RosterEntryDto {

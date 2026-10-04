@@ -20,7 +20,11 @@ import {
   updateProjectStatus,
   updateProjectRecord,
 } from "../services/projectService";
-import { findUserByEmail, UserRecord } from "../services/userService";
+import {
+  findUserByEmail,
+  findUserById,
+  UserRecord,
+} from "../services/userService";
 import { getSupabaseAdminClient } from "../services/supabaseClient";
 import { uploadFile, downloadFile, deleteFile } from "../services/storage";
 
@@ -39,11 +43,38 @@ const ALLOWED_MIME_TYPES = new Set([
   "application/zip",
 ]);
 
+// Some browsers/OSes send Office files as application/octet-stream (or an
+// empty type), so fall back to the file extension for those.
+const ALLOWED_EXTENSIONS = new Set([
+  "pdf",
+  "doc",
+  "docx",
+  "ppt",
+  "pptx",
+  "xls",
+  "xlsx",
+  "txt",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "zip",
+]);
+
+const getFileExtension = (name: string): string =>
+  name.includes(".") ? (name.split(".").pop() ?? "").toLowerCase() : "";
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB max
   fileFilter: (_req, file, cb) => {
-    if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+    const genericType =
+      !file.mimetype || file.mimetype === "application/octet-stream";
+
+    if (
+      ALLOWED_MIME_TYPES.has(file.mimetype) ||
+      (genericType && ALLOWED_EXTENSIONS.has(getFileExtension(file.originalname)))
+    ) {
       cb(null, true);
     } else {
       cb(new Error(`File type ${file.mimetype} is not allowed.`));
@@ -280,6 +311,56 @@ const ensureSubmitterMember = (
       isPrimary: members.every((member) => !member.isPrimary),
     },
     ...members,
+  ];
+};
+
+// Look up the advisor assigned to a course by its course code.
+const findCourseAdvisorByCode = async (
+  courseCode: string | null,
+): Promise<{ courseId: number; advisor: UserRecord | null } | null> => {
+  if (!courseCode) {
+    return null;
+  }
+
+  const supabase = getSupabaseAdminClient();
+  const { data: course } = await supabase
+    .from("course")
+    .select("id, advisor_id")
+    .eq("course_code", courseCode)
+    .maybeSingle();
+
+  if (!course) {
+    return null;
+  }
+
+  if (!course.advisor_id) {
+    return { courseId: course.id, advisor: null };
+  }
+
+  const advisorResponse = await findUserById(course.advisor_id);
+  return { courseId: course.id, advisor: advisorResponse.data ?? null };
+};
+
+// Add the course advisor as a lecturer member when no advisor is listed.
+const withCourseAdvisorMember = (
+  members: NormalizedTeamMember[],
+  advisor: UserRecord | null,
+): NormalizedTeamMember[] => {
+  if (!advisor || members.some((member) => member.role === "lecturer")) {
+    return members;
+  }
+
+  return [
+    ...members.filter(
+      (member) => member.email.toLowerCase() !== advisor.email.toLowerCase(),
+    ),
+    {
+      id: advisor.id.toString(),
+      name: advisor.name,
+      email: advisor.email,
+      role: "lecturer",
+      isPrimary: false,
+    },
   ];
 };
 
@@ -529,9 +610,12 @@ projectsRouter.post(
 
     const keywords = normalizeStringArray(rawKeywords);
     const externalLinks = normalizeStringArray(rawExternalLinks);
-    const normalizedMembers = ensureSubmitterMember(
-      submitter,
-      normalizeTeamMembers(rawTeamMembers),
+    const courseLookup = await findCourseAdvisorByCode(
+      normalizeString(courseCode),
+    );
+    const normalizedMembers = withCourseAdvisorMember(
+      ensureSubmitterMember(submitter, normalizeTeamMembers(rawTeamMembers)),
+      courseLookup?.advisor ?? null,
     );
 
     if (normalizedMembers.every((member) => !member.isPrimary)) {
@@ -782,7 +866,13 @@ projectsRouter.patch(
     const normalizedTitle = normalizeString(title);
     const keywords = normalizeStringArray(rawKeywords);
     const externalLinks = normalizeStringArray(rawExternalLinks);
-    const normalizedMembers = normalizeTeamMembers(rawTeamMembers);
+    const courseLookup = await findCourseAdvisorByCode(
+      normalizeString(courseCode),
+    );
+    const normalizedMembers = withCourseAdvisorMember(
+      normalizeTeamMembers(rawTeamMembers),
+      courseLookup?.advisor ?? null,
+    );
     const files = normalizeFiles(rawFiles);
 
     // Extract advisor from team members if present
@@ -1510,7 +1600,9 @@ projectsRouter.post(
         uploadedFileSummaries.push({
           name: file.originalname,
           size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-          type: file.mimetype.split("/")[1]?.toUpperCase() ?? "FILE",
+          type:
+            getFileExtension(file.originalname).toUpperCase() ||
+            (file.mimetype.split("/")[1]?.toUpperCase() ?? "FILE"),
           storagePath,
         });
       }

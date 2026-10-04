@@ -72,12 +72,17 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
       const savedView = localStorage.getItem("currentView");
       if (savedView) setCurrentView(savedView);
     }
+  }, [location.pathname]);
 
+  // Restore the open project only on first load (e.g. after a reload). Doing
+  // this on every route change re-opened the detail view over the page the
+  // user just navigated to, because the stored value was still the old one.
+  useEffect(() => {
     const savedProject = localStorage.getItem("selectedProject");
     if (savedProject && savedProject !== "null") {
       setSelectedProject(savedProject);
     }
-  }, [location.pathname]);
+  }, []);
 
   // Save state whenever it changes
   useEffect(() => {

@@ -69,7 +69,8 @@ const ensureRosterAccess = async (
 
   if (role !== "advisor") {
     res.status(403).json({
-      error: "Only coordinators or assigned advisors can access course rosters.",
+      error:
+        "Only coordinators or assigned advisors can access course rosters.",
     });
     return false;
   }
@@ -275,6 +276,40 @@ coursesRouter.post(
         advisorId: course.advisor_id,
         advisorName: resolvedAdvisorName,
       },
+    });
+  },
+);
+
+// Look up the advisor for a course code (any authenticated user)
+coursesRouter.get(
+  "/advisor-by-code/:courseCode",
+  verifyFirebaseAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const courseCode = String(req.params.courseCode ?? "").trim();
+
+    if (!courseCode) {
+      res.status(400).json({ error: "Course code is required." });
+      return;
+    }
+
+    const supabase = getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("course")
+      .select("advisor:user!course_advisor_id_fkey(id, name, email)")
+      .eq("course_code", courseCode)
+      .maybeSingle();
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    const advisor = (
+      data as { advisor?: { name: string; email: string } | null } | null
+    )?.advisor;
+
+    res.json({
+      advisor: advisor ? { name: advisor.name, email: advisor.email } : null,
     });
   },
 );

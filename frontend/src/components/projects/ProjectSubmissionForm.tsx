@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Upload, Plus, X, User, UserCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { fetchCourseAdvisorByCode } from "@/services/courseApi";
 import {
   submitProject,
   updateProject,
@@ -212,6 +213,61 @@ export const ProjectSubmissionForm = ({
     email: "",
     role: "student" as "student" | "lecturer",
   });
+
+  const autoAdvisorEmailRef = useRef<string | null>(null);
+
+  // Auto-fill the course advisor as a member when a course code is entered.
+  useEffect(() => {
+    const code = (formData.courseCode || "").trim();
+    if (!authToken || !code) return;
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const advisor = await fetchCourseAdvisorByCode(code, authToken);
+        if (cancelled) return;
+
+        const previousAuto = autoAdvisorEmailRef.current;
+        setTeamMembers((prev) => {
+          const withoutPrevAuto = prev.filter(
+            (member) =>
+              !(
+                previousAuto &&
+                member.role === "lecturer" &&
+                member.email.toLowerCase() === previousAuto
+              )
+          );
+
+          if (
+            !advisor ||
+            withoutPrevAuto.some((member) => member.role === "lecturer")
+          ) {
+            autoAdvisorEmailRef.current = null;
+            return withoutPrevAuto;
+          }
+
+          autoAdvisorEmailRef.current = advisor.email.toLowerCase();
+          return [
+            ...withoutPrevAuto,
+            {
+              id: nanoid(),
+              name: advisor.name,
+              email: advisor.email,
+              role: "lecturer",
+              isPrimary: false,
+            },
+          ];
+        });
+      } catch (_error) {
+        // lookup is best-effort; the server also assigns the advisor on save
+      }
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [formData.courseCode, authToken]);
 
   useEffect(() => {
     setTeamMembers((prev) => {
@@ -469,17 +525,14 @@ export const ProjectSubmissionForm = ({
     ]);
 
     const validFiles = files.filter((file) => {
-      const maxSize = 50 * 1024 * 1024; // 50MB
-      const allowedTypes = [
-        "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.ms-powerpoint",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "application/zip",
-      ];
+      const maxSize = 20 * 1024 * 1024; // matches the server upload limit
+      const allowedExtensions = ["pdf", "doc", "docx", "ppt", "pptx", "zip"];
+      // Browsers often report an empty/generic MIME type for Office files,
+      // so judge by extension rather than file.type.
+      const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
 
-      const isAllowed = file.size <= maxSize && allowedTypes.includes(file.type);
+      const isAllowed =
+        file.size <= maxSize && allowedExtensions.includes(extension);
       const isDuplicate = blockedNames.has(normalizeProjectFileName(file.name));
 
       return isAllowed && !isDuplicate;
@@ -488,7 +541,7 @@ export const ProjectSubmissionForm = ({
     if (validFiles.length !== files.length) {
       toast({
         title: "Some files were rejected",
-        description: "Only PDF, DOC, PPT, ZIP files up to 50MB are allowed",
+        description: "Only PDF, DOC/DOCX, PPT/PPTX, ZIP files up to 20MB are allowed",
         variant: "destructive",
       });
     }
@@ -500,7 +553,11 @@ export const ProjectSubmissionForm = ({
     const fileObjects = validFiles.map((file) => ({
       name: file.name,
       size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-      type: file.type.split("/")[1].toUpperCase(),
+      type: (
+        file.name.split(".").pop() ||
+        file.type.split("/")[1] ||
+        "file"
+      ).toUpperCase(),
       pendingId: nanoid(),
     }));
 
@@ -1261,13 +1318,20 @@ export const ProjectSubmissionForm = ({
             {/* File Upload */}
             <div>
               <Label>Files & Attachments</Label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              <div
+                className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleFileUpload(e.dataTransfer.files);
+                }}
+              >
                 <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600 mb-2">
                   Drag and drop files here, or click to browse
                 </p>
                 <p className="text-sm text-gray-500">
-                  Supports PDF, DOC, PPT, ZIP files up to 50MB each
+                  Supports PDF, DOC/DOCX, PPT/PPTX, ZIP files up to 20MB each
                 </p>
                 <input
                   type="file"
