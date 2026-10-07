@@ -526,7 +526,21 @@ export const ProjectSubmissionForm = ({
 
     const validFiles = files.filter((file) => {
       const maxSize = 20 * 1024 * 1024; // matches the server upload limit
-      const allowedExtensions = ["pdf", "doc", "docx", "ppt", "pptx", "zip"];
+      const allowedExtensions = [
+        "pdf",
+        "doc",
+        "docx",
+        "ppt",
+        "pptx",
+        "xls",
+        "xlsx",
+        "txt",
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "zip",
+      ];
       // Browsers often report an empty/generic MIME type for Office files,
       // so judge by extension rather than file.type.
       const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -541,7 +555,8 @@ export const ProjectSubmissionForm = ({
     if (validFiles.length !== files.length) {
       toast({
         title: "Some files were rejected",
-        description: "Only PDF, DOC/DOCX, PPT/PPTX, ZIP files up to 20MB are allowed",
+        description:
+          "Only PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, image, or ZIP files up to 20MB are allowed",
         variant: "destructive",
       });
     }
@@ -1331,14 +1346,14 @@ export const ProjectSubmissionForm = ({
                   Drag and drop files here, or click to browse
                 </p>
                 <p className="text-sm text-gray-500">
-                  Supports PDF, DOC/DOCX, PPT/PPTX, ZIP files up to 20MB each
+                  Supports PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, images, and ZIP files up to 20MB each
                 </p>
                 <input
                   type="file"
                   id="file-upload"
                   className="hidden"
                   multiple
-                  accept=".pdf,.doc,.docx,.ppt,.pptx,.zip"
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.gif,.zip"
                   onChange={(e) => handleFileUpload(e.target.files)}
                 />
                 <Button
