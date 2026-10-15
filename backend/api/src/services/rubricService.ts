@@ -68,6 +68,7 @@ export interface UpdateRubricInput {
 
 export interface RubricWithCriteria extends RubricRow {
   criteria: (RubricCriterionRow & { levels: RubricLevelRow[] })[];
+  course_ids: number[];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -126,7 +127,14 @@ export async function listRubrics(): Promise<
       criteriaWithLevels.push({ ...criterion, levels: levels ?? [] });
     }
 
-    result.push({ ...rubric, criteria: criteriaWithLevels });
+    const courseIds = await getRubricCourseIds(supabase, rubric.id);
+    if (typeof courseIds === "string") return fail(courseIds);
+
+    result.push({
+      ...rubric,
+      criteria: criteriaWithLevels,
+      course_ids: courseIds,
+    });
   }
 
   return ok(result);
@@ -169,7 +177,10 @@ export async function getRubricById(
     criteriaWithLevels.push({ ...criterion, levels: levels ?? [] });
   }
 
-  return ok({ ...rubric, criteria: criteriaWithLevels });
+  const courseIds = await getRubricCourseIds(supabase, rubric.id);
+  if (typeof courseIds === "string") return fail(courseIds);
+
+  return ok({ ...rubric, criteria: criteriaWithLevels, course_ids: courseIds });
 }
 
 export async function createRubric(
@@ -200,7 +211,7 @@ export async function createRubric(
   );
   if (typeof criteriaWithLevels === "string") return fail(criteriaWithLevels);
 
-  return ok({ ...rubric, criteria: criteriaWithLevels });
+  return ok({ ...rubric, criteria: criteriaWithLevels, course_ids: [] });
 }
 
 export async function updateRubric(
@@ -246,7 +257,10 @@ export async function updateRubric(
     );
     if (typeof criteriaWithLevels === "string") return fail(criteriaWithLevels);
 
-    return ok({ ...rubric, criteria: criteriaWithLevels });
+    const courseIds = await getRubricCourseIds(supabase, id);
+    if (typeof courseIds === "string") return fail(courseIds);
+
+    return ok({ ...rubric, criteria: criteriaWithLevels, course_ids: courseIds });
   }
 
   // Return with existing criteria
@@ -282,7 +296,80 @@ export async function toggleRubricStatus(
   return updateRubric(id, { isActive: !current.is_active });
 }
 
+/**
+ * Replace a rubric's course assignments with `courseIds`.
+ * When `scopeCourseIds` is given (advisors), only assignments inside that
+ * scope are touched, so courses managed by other people keep their rubric.
+ */
+export async function setRubricCourses(
+  rubricId: number,
+  courseIds: number[],
+  scopeCourseIds: number[] | null,
+): Promise<ServiceResult<RubricWithCriteria>> {
+  const supabase = getSupabaseAdminClient();
+
+  if (scopeCourseIds) {
+    const outOfScope = courseIds.filter((id) => !scopeCourseIds.includes(id));
+    if (outOfScope.length > 0) {
+      return fail("You can only assign rubrics to your own courses.", "forbidden");
+    }
+  }
+
+  const { data: rubric, error: rubricErr } = await supabase
+    .from("rubric")
+    .select("id")
+    .eq("id", rubricId)
+    .maybeSingle();
+
+  if (rubricErr) return fail(rubricErr.message, rubricErr.code);
+  if (!rubric) return fail("Rubric not found.", "not_found");
+
+  let deleteQuery = supabase
+    .from("rubric_course")
+    .delete()
+    .eq("rubric_id", rubricId);
+  if (scopeCourseIds) {
+    if (scopeCourseIds.length === 0) return getRubricById(rubricId);
+    deleteQuery = deleteQuery.in("course_id", scopeCourseIds);
+  }
+
+  const { error: delErr } = await deleteQuery;
+  if (delErr) return fail(delErr.message, delErr.code);
+
+  if (courseIds.length > 0) {
+    const { error: insErr } = await supabase
+      .from("rubric_course")
+      .insert(courseIds.map((courseId) => ({ rubric_id: rubricId, course_id: courseId })));
+
+    if (insErr) return fail(insErr.message, insErr.code);
+  }
+
+  return getRubricById(rubricId);
+}
+
 // ── Private helper ───────────────────────────────────────────────────────
+
+/**
+ * Course ids a rubric is assigned to. Returns [] if the rubric_course
+ * migration has not been run yet, so the rest of rubric management keeps
+ * working without it.
+ */
+async function getRubricCourseIds(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  rubricId: number,
+): Promise<number[] | string> {
+  const { data, error } = await supabase
+    .from("rubric_course")
+    .select("course_id")
+    .eq("rubric_id", rubricId);
+
+  if (error) {
+    if (error.code === TABLE_NOT_FOUND_CODE) return [];
+    return error.message;
+  }
+
+  return (data ?? []).map((row) => row.course_id as number);
+}
 
 async function insertCriteria(
   supabase: ReturnType<typeof getSupabaseAdminClient>,

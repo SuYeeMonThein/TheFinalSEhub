@@ -43,6 +43,7 @@ export interface RubricDto {
   created_at: string;
   updated_at: string;
   criteria: RubricCriterionDto[];
+  course_ids?: number[];
 }
 
 export interface LevelInput {
@@ -164,6 +165,22 @@ export const toggleRubricStatus = async (
   const response = await fetch(buildUrl(`/rubrics/${id}/toggle`), {
     method: "PATCH",
     headers: buildAuthHeaders(token),
+  });
+
+  const body = await handleJsonResponse<{ rubric?: RubricDto }>(response);
+  if (!body?.rubric) throw new Error("Rubric payload missing in response.");
+  return body.rubric;
+};
+
+export const assignRubricCourses = async (
+  id: number,
+  courseIds: number[],
+  token: string,
+): Promise<RubricDto> => {
+  const response = await fetch(buildUrl(`/rubrics/${id}/courses`), {
+    method: "PUT",
+    headers: buildAuthHeaders(token, true),
+    body: JSON.stringify({ courseIds }),
   });
 
   const body = await handleJsonResponse<{ rubric?: RubricDto }>(response);

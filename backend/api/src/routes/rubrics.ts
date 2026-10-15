@@ -11,8 +11,11 @@ import {
   updateRubric,
   deleteRubric,
   toggleRubricStatus,
+  setRubricCourses,
   TABLE_NOT_FOUND_CODE,
 } from "../services/rubricService";
+import { getSupabaseAdminClient } from "../services/supabaseClient";
+import { findUserByEmail } from "../services/userService";
 
 const rubricsRouter = Router();
 
@@ -138,6 +141,87 @@ rubricsRouter.patch(
     }
 
     const result = await toggleRubricStatus(id);
+    if (handleServiceResult(res, result)) return;
+    res.json({ rubric: result.data });
+  },
+);
+
+// PUT /rubrics/:id/courses — set which courses use this rubric (advisor only).
+// Coordinators can assign to any course; advisors only to courses they advise.
+rubricsRouter.put(
+  "/:id/courses",
+  requireAdvisor,
+  async (req: AuthedRequest, res: Response) => {
+    const id = parseInt(req.params.id, 10);
+
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid rubric ID." });
+      return;
+    }
+
+    const rawCourseIds: unknown = req.body?.courseIds;
+    const courseIds = Array.isArray(rawCourseIds)
+      ? rawCourseIds.map((value) => Number(value))
+      : null;
+
+    if (
+      !courseIds ||
+      courseIds.some((value) => !Number.isInteger(value) || value <= 0)
+    ) {
+      res
+        .status(400)
+        .json({ error: "courseIds must be an array of course IDs." });
+      return;
+    }
+
+    let scopeCourseIds: number[] | null = null;
+    const role = req.actingRole ?? req.user?.role;
+
+    if (role !== "coordinator") {
+      const email = req.user?.email;
+      const userResponse = email ? await findUserByEmail(email) : null;
+
+      if (!userResponse || userResponse.error || !userResponse.data) {
+        res.status(404).json({ error: "User not found." });
+        return;
+      }
+
+      const { data: ownCourses, error: courseErr } =
+        await getSupabaseAdminClient()
+          .from("course")
+          .select("id")
+          .eq("advisor_id", userResponse.data.id);
+
+      if (courseErr) {
+        res.status(500).json({ error: courseErr.message });
+        return;
+      }
+
+      scopeCourseIds = (ownCourses ?? []).map((course) => course.id as number);
+    }
+
+    const result = await setRubricCourses(
+      id,
+      Array.from(new Set(courseIds)),
+      scopeCourseIds,
+    );
+
+    if (result.error !== null && result.code === "forbidden") {
+      res.status(403).json({ error: result.error });
+      return;
+    }
+    if (result.error !== null && result.code === "not_found") {
+      res.status(404).json({ error: result.error });
+      return;
+    }
+    if (result.error !== null && result.code === TABLE_NOT_FOUND_CODE) {
+      res.status(503).json({
+        error:
+          "The rubric_course table has not been created yet. Run backend/database/migrations/20261015_add_rubric_course.sql.",
+        code: "setup_required",
+      });
+      return;
+    }
     if (handleServiceResult(res, result)) return;
     res.json({ rubric: result.data });
   },

@@ -15,10 +15,13 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -28,17 +31,27 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Edit, Trash2, Eye, Save, X, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  Save,
+  X,
+  Loader2,
+  BookOpen,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   fetchRubrics,
   createRubric,
   updateRubric,
   deleteRubric as deleteRubricApi,
-  toggleRubricStatus as toggleRubricStatusApi,
+  assignRubricCourses,
   type RubricDto,
   type CriterionInput,
 } from "@/services/rubricApi";
+import { fetchCourses, type CourseDto } from "@/services/courseApi";
 
 interface PLO {
   id: string;
@@ -141,6 +154,7 @@ const toLocalRubric = (dto: RubricDto) => ({
   createdBy: dto.created_by,
   createdAt: dto.created_at?.split("T")[0] ?? "",
   isActive: dto.is_active,
+  courseIds: (dto.course_ids ?? []).map((id) => id.toString()),
 });
 
 type LocalRubric = ReturnType<typeof toLocalRubric>;
@@ -206,6 +220,70 @@ export const RubricManagement = ({
   useEffect(() => {
     void loadRubrics();
   }, [loadRubrics]);
+
+  // ── Courses for rubric assignment ────────────────────────────────────
+  const [courses, setCourses] = useState<CourseDto[]>([]);
+  const [assigningRubric, setAssigningRubric] = useState<LocalRubric | null>(
+    null,
+  );
+  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
+  const [isSavingCourses, setIsSavingCourses] = useState(false);
+
+  useEffect(() => {
+    if (!authToken) return;
+    fetchCourses(authToken)
+      .then(setCourses)
+      .catch(() => setCourses([]));
+  }, [authToken]);
+
+  const getCourseLabel = (courseId: string) => {
+    const course = courses.find((c) => c.id === courseId);
+    return course ? course.courseCode : null;
+  };
+
+  const openAssignCourses = (rubric: LocalRubric) => {
+    setAssigningRubric(rubric);
+    setSelectedCourseIds(rubric.courseIds);
+  };
+
+  const toggleCourseSelection = (courseId: string, checked: boolean) => {
+    setSelectedCourseIds((prev) =>
+      checked ? [...prev, courseId] : prev.filter((id) => id !== courseId),
+    );
+  };
+
+  const handleSaveCourseAssignment = async () => {
+    if (!authToken || !assigningRubric) return;
+    setIsSavingCourses(true);
+    try {
+      // Only send courses this user can see; the server keeps the rest.
+      const visibleIds = selectedCourseIds.filter((id) =>
+        courses.some((c) => c.id === id),
+      );
+      await assignRubricCourses(
+        parseInt(assigningRubric.id),
+        visibleIds.map((id) => parseInt(id)),
+        authToken,
+      );
+      toast({
+        title: "Courses updated",
+        description: `"${assigningRubric.name}" is assigned to ${visibleIds.length} course${visibleIds.length === 1 ? "" : "s"}.`,
+      });
+      setAssigningRubric(null);
+      await loadRubrics();
+    } catch (err) {
+      toast({
+        title: "Error",
+        description:
+          err instanceof Error
+            ? err.message
+            : "Failed to assign rubric to courses",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingCourses(false);
+    }
+  };
 
   const [newCriterion, setNewCriterion] = useState<Partial<RubricCriterion>>({
     name: "",
@@ -399,20 +477,6 @@ export const RubricManagement = ({
     }
   };
 
-  const handleToggleRubricStatus = async (id: string) => {
-    if (!authToken) return;
-    try {
-      await toggleRubricStatusApi(parseInt(id), authToken);
-      await loadRubrics();
-    } catch (err: any) {
-      toast({
-        title: "Error",
-        description: err.message ?? "Failed to toggle status",
-        variant: "destructive",
-      });
-    }
-  };
-
   const getPLODisplayName = (ploId: string) => {
     const plo = samplePLOs.find((p) => p.id === ploId);
     return plo ? `${plo.code}: ${plo.description}` : ploId;
@@ -543,6 +607,7 @@ export const RubricManagement = ({
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Project Types</TableHead>
+                      <TableHead>Courses</TableHead>
                       <TableHead>Criteria Count</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Created</TableHead>
@@ -572,6 +637,25 @@ export const RubricManagement = ({
                               </Badge>
                             ))}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {rubric.courseIds.length === 0 ? (
+                            <span className="text-sm text-muted-foreground">
+                              None
+                            </span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {rubric.courseIds.map((courseId) => (
+                                <Badge
+                                  key={courseId}
+                                  variant="outline"
+                                  className="text-xs"
+                                >
+                                  {getCourseLabel(courseId) ?? `Course #${courseId}`}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>{rubric.criteria.length}</TableCell>
                         <TableCell>
@@ -664,11 +748,10 @@ export const RubricManagement = ({
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() =>
-                                handleToggleRubricStatus(rubric.id)
-                              }
+                              onClick={() => openAssignCourses(rubric)}
                             >
-                              {rubric.isActive ? "Deactivate" : "Activate"}
+                              <BookOpen className="w-4 h-4 mr-1" />
+                              Assign to Course
                             </Button>
                             <Button
                               variant="outline"
@@ -687,6 +770,83 @@ export const RubricManagement = ({
               )}
             </CardContent>
           </Card>
+
+          <Dialog
+            open={assigningRubric !== null}
+            onOpenChange={(open) => {
+              if (!open) setAssigningRubric(null);
+            }}
+          >
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Assign Rubric to Course</DialogTitle>
+                <DialogDescription>
+                  Choose the courses that use "{assigningRubric?.name}" for
+                  project evaluation.
+                </DialogDescription>
+              </DialogHeader>
+              {courses.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  No courses available.
+                </p>
+              ) : (
+                <div className="max-h-[50vh] space-y-2 overflow-y-auto">
+                  {courses.map((course) => {
+                    const checkboxId = `rubric-course-${course.id}`;
+                    return (
+                      <label
+                        key={course.id}
+                        htmlFor={checkboxId}
+                        className="flex cursor-pointer items-center gap-3 rounded border p-3 hover:bg-muted/50"
+                      >
+                        <Checkbox
+                          id={checkboxId}
+                          checked={selectedCourseIds.includes(course.id)}
+                          onCheckedChange={(checked) =>
+                            toggleCourseSelection(course.id, checked === true)
+                          }
+                        />
+                        <div>
+                          <p className="font-medium">
+                            {course.courseCode}
+                            {course.title && course.title !== course.courseCode
+                              ? ` — ${course.title}`
+                              : ""}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {course.semester} {course.year}
+                            {course.advisorName
+                              ? ` · ${course.advisorName}`
+                              : ""}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setAssigningRubric(null)}
+                  disabled={isSavingCourses}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => void handleSaveCourseAssignment()}
+                  disabled={isSavingCourses || courses.length === 0}
+                >
+                  {isSavingCourses ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  Save
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="create" className="space-y-6">
