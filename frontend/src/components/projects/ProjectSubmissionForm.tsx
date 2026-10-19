@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { nanoid } from "nanoid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Upload, Plus, X, User, UserCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { fetchCourseAdvisorByCode } from "@/services/courseApi";
+import { fetchCourseAdvisorByCode, fetchEnrolledCourses } from "@/services/courseApi";
 import {
   submitProject,
   updateProject,
@@ -185,6 +185,16 @@ export const ProjectSubmissionForm = ({
 }: ProjectSubmissionFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  // Students pick a course from the ones they are enrolled in; other roles
+  // (e.g. coordinators editing a project) keep the free-text field.
+  const isStudent = user.role === "student";
+  const NO_COURSE = "__none__";
+  const { data: enrolledCourses = [], isLoading: enrolledCoursesLoading } =
+    useQuery({
+      queryKey: ["enrolled-courses", authToken],
+      queryFn: () => fetchEnrolledCourses(authToken as string),
+      enabled: isStudent && Boolean(authToken),
+    });
   const buildSubmitterMember = useCallback(
     (): TeamMember => ({
       id: nanoid(),
@@ -215,6 +225,22 @@ export const ProjectSubmissionForm = ({
   });
 
   const autoAdvisorEmailRef = useRef<string | null>(null);
+  const [invalidFields, setInvalidFields] = useState<string[]>([]);
+  const uploadResultRef = useRef<{ count: number; failed: boolean }>({
+    count: 0,
+    failed: false,
+  });
+
+  const clearInvalid = (id: string) =>
+    setInvalidFields((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : prev));
+  const invalidClass = (id: string) =>
+    invalidFields.includes(id)
+      ? "border-red-500 focus-visible:ring-red-500"
+      : "";
+  const requiredMessage = (id: string) =>
+    invalidFields.includes(id) ? (
+      <p className="text-sm text-red-600 mt-1">This field is required.</p>
+    ) : null;
 
   // Auto-fill the course advisor as a member when a course code is entered.
   useEffect(() => {
@@ -367,6 +393,18 @@ export const ProjectSubmissionForm = ({
     "Other",
   ];
 
+
+  // Sentence describing whether the attached files were saved. Only one toast
+  // is visible at a time, so this is merged into the success toast.
+  const uploadNote = () => {
+    const { count, failed } = uploadResultRef.current;
+    if (failed)
+      return " However, the attached files could not be uploaded — open the project and attach them again.";
+    if (count > 0)
+      return ` ${count} file${count > 1 ? "s were" : " was"} successfully uploaded and submitted with it.`;
+    return "";
+  };
+
   const projectMutation = useMutation<ProjectDto, Error, CreateProjectPayload>({
     mutationFn: async (payload) => {
       if (!authToken) {
@@ -376,11 +414,14 @@ export const ProjectSubmissionForm = ({
       const project = await submitProject(payload, authToken);
 
       // Upload actual files to storage after project is created
+      uploadResultRef.current = { count: 0, failed: false };
       if (pendingFiles.length > 0) {
         try {
           await uploadProjectFiles(project.id, pendingFiles.map((f) => f.file), authToken);
+          uploadResultRef.current = { count: pendingFiles.length, failed: false };
         } catch (err) {
           console.error("File upload failed:", err);
+          uploadResultRef.current = { count: 0, failed: true };
         }
       }
 
@@ -392,8 +433,14 @@ export const ProjectSubmissionForm = ({
           variables.status === "Draft" ? "Draft saved" : "Project submitted",
         description:
           variables.status === "Draft"
-            ? "Your project draft is saved. You can complete it later from My Projects."
-            : "Your project has been submitted and is now under review.",
+            ? "Your project draft is saved. You can complete it later from My Projects." +
+              uploadNote()
+            : "Your project has been submitted and is now under review." +
+              uploadNote(),
+        variant:
+          uploadResultRef.current.failed && variables.status !== "Draft"
+            ? "destructive"
+            : "success",
       });
 
       onProjectCreated?.(project);
@@ -427,11 +474,14 @@ export const ProjectSubmissionForm = ({
       const project = await updateProject(projectId, payload, authToken);
 
       // Upload actual files to storage after project is updated
+      uploadResultRef.current = { count: 0, failed: false };
       if (pendingFiles.length > 0) {
         try {
           await uploadProjectFiles(project.id, pendingFiles.map((f) => f.file), authToken);
+          uploadResultRef.current = { count: pendingFiles.length, failed: false };
         } catch (err) {
           console.error("File upload failed:", err);
+          uploadResultRef.current = { count: 0, failed: true };
         }
       }
 
@@ -446,7 +496,13 @@ export const ProjectSubmissionForm = ({
         description:
           variables.payload.status === "Draft"
             ? "Your project draft has been updated."
-            : "Your project has been updated and submitted for review.",
+            : "Your project has been updated and submitted for review." +
+              uploadNote(),
+        variant:
+          uploadResultRef.current.failed &&
+          variables.payload.status !== "Draft"
+            ? "destructive"
+            : "success",
       });
 
       onProjectUpdate?.(
@@ -552,11 +608,27 @@ export const ProjectSubmissionForm = ({
       return isAllowed && !isDuplicate;
     });
 
-    if (validFiles.length !== files.length) {
+    // Only one toast shows at a time, so report accepted and rejected files together.
+    const rejectedCount = files.length - validFiles.length;
+    const addedNames = validFiles.map((file) => file.name).join(", ");
+    if (validFiles.length > 0) {
       toast({
-        title: "Some files were rejected",
+        title:
+          validFiles.length === 1
+            ? "File uploaded successfully"
+            : `${validFiles.length} files uploaded successfully`,
+        variant: "success",
         description:
-          "Only PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, image, or ZIP files up to 20MB are allowed",
+          `${addedNames} uploaded successfully.` +
+          (rejectedCount > 0
+            ? ` ${rejectedCount} file${rejectedCount > 1 ? "s were" : " was"} rejected: only PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, image, or ZIP files up to 20MB that are not already attached are allowed.`
+            : ""),
+      });
+    } else if (rejectedCount > 0) {
+      toast({
+        title: "File rejected",
+        description:
+          "Only PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, image, or ZIP files up to 20MB that are not already attached are allowed.",
         variant: "destructive",
       });
     }
@@ -723,18 +795,25 @@ export const ProjectSubmissionForm = ({
   const handleSubmit = (e: React.FormEvent, isDraft = false) => {
     e.preventDefault();
 
-    if (
-      !formData.title.trim() ||
-      !formData.type ||
-      !formData.description.trim()
-    ) {
+    const missing: { id: string; label: string }[] = [];
+    if (!formData.title.trim()) missing.push({ id: "title", label: "Project Title" });
+    if (!formData.type) missing.push({ id: "type", label: "Project Type" });
+    if (!formData.description.trim())
+      missing.push({ id: "description", label: "Abstract/Description" });
+
+    if (missing.length > 0) {
+      setInvalidFields(missing.map((m) => m.id));
       toast({
-        title: "Error",
-        description: "Please fill in all required fields",
+        title: "Please fill in all required fields",
+        description: `Missing: ${missing.map((m) => m.label).join(", ")}.`,
         variant: "destructive",
       });
+      const first = document.getElementById(missing[0].id);
+      first?.scrollIntoView({ behavior: "smooth", block: "center" });
+      first?.focus();
       return;
     }
+    setInvalidFields([]);
 
     const membersWithSubmitter = (() => {
       const existing = [...teamMembers];
@@ -1013,38 +1092,95 @@ export const ProjectSubmissionForm = ({
                 <Input
                   id="title"
                   value={formData.title}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, title: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    clearInvalid("title");
+                    setFormData((prev) => ({ ...prev, title: e.target.value }));
+                  }}
                   placeholder="Enter project title"
-                  required
+                  className={invalidClass("title")}
+                  aria-invalid={invalidFields.includes("title")}
                 />
+                {requiredMessage("title")}
               </div>
 
               <div className="md:col-span-2">
                 <Label htmlFor="courseCode">Course Code</Label>
-                <Input
-                  id="courseCode"
-                  value={formData.courseCode || ""}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      courseCode: e.target.value,
-                    }))
-                  }
-                  placeholder="Enter course code (e.g., 1305394)"
-                />
+                {isStudent ? (
+                  <>
+                    <Select
+                      value={formData.courseCode || NO_COURSE}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          courseCode: value === NO_COURSE ? "" : value,
+                        }))
+                      }
+                      disabled={enrolledCoursesLoading}
+                    >
+                      <SelectTrigger id="courseCode">
+                        <SelectValue
+                          placeholder={
+                            enrolledCoursesLoading
+                              ? "Loading your courses..."
+                              : "Select a course"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_COURSE}>No course</SelectItem>
+                        {enrolledCourses.map((course) => (
+                          <SelectItem key={course.courseId} value={course.courseCode}>
+                            {course.courseCode} — {course.title} (Semester{" "}
+                            {course.semester}/{course.year})
+                          </SelectItem>
+                        ))}
+                        {/* Keep a code saved before rosters existed selectable when editing. */}
+                        {formData.courseCode &&
+                          !enrolledCourses.some(
+                            (course) => course.courseCode === formData.courseCode
+                          ) && (
+                            <SelectItem value={formData.courseCode}>
+                              {formData.courseCode} (current)
+                            </SelectItem>
+                          )}
+                      </SelectContent>
+                    </Select>
+                    {!enrolledCoursesLoading && enrolledCourses.length === 0 && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        You are not enrolled in any course yet. Ask your
+                        coordinator to add you to a course roster.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <Input
+                    id="courseCode"
+                    value={formData.courseCode || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        courseCode: e.target.value,
+                      }))
+                    }
+                    placeholder="Enter course code (e.g., 1305394)"
+                  />
+                )}
               </div>
 
               <div>
                 <Label htmlFor="type">Project Type *</Label>
                 <Select
                   value={formData.type}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, type: value }))
-                  }
+                  onValueChange={(value) => {
+                    clearInvalid("type");
+                    setFormData((prev) => ({ ...prev, type: value }));
+                  }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger
+                    id="type"
+                    className={invalidClass("type")}
+                    aria-invalid={invalidFields.includes("type")}
+                  >
                     <SelectValue placeholder="Select project type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1055,6 +1191,7 @@ export const ProjectSubmissionForm = ({
                     ))}
                   </SelectContent>
                 </Select>
+                {requiredMessage("type")}
               </div>
 
               <div>
@@ -1112,16 +1249,19 @@ export const ProjectSubmissionForm = ({
               <Textarea
                 id="description"
                 value={formData.description}
-                onChange={(e) =>
+                onChange={(e) => {
+                  clearInvalid("description");
                   setFormData((prev) => ({
                     ...prev,
                     description: e.target.value,
-                  }))
-                }
+                  }));
+                }}
                 placeholder="Provide a detailed description of your project..."
                 rows={6}
-                required
+                className={invalidClass("description")}
+                aria-invalid={invalidFields.includes("description")}
               />
+              {requiredMessage("description")}
             </div>
 
             {/* Keywords */}

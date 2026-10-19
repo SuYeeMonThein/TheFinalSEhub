@@ -168,6 +168,30 @@ export const fetchCourseAdvisorByCode = async (
   return body?.advisor ?? null;
 };
 
+export interface EnrolledCourseDto {
+  courseId: number;
+  courseCode: string;
+  title: string;
+  semester: string;
+  year: number;
+  advisorName: string | null;
+}
+
+// Courses the signed-in student is on the roster for.
+export const fetchEnrolledCourses = async (
+  token: string,
+): Promise<EnrolledCourseDto[]> => {
+  const response = await fetch(buildUrl("/courses/enrolled"), {
+    headers: buildAuthHeaders(token),
+  });
+
+  const body = await handleJsonResponse<{ courses?: EnrolledCourseDto[] }>(
+    response,
+  );
+
+  return body?.courses ?? [];
+};
+
 // --- Roster APIs ---
 
 export interface RosterEntryDto {

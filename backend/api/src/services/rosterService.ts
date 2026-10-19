@@ -112,3 +112,64 @@ export const deleteRosterEntry = async (
 
   return { data: response.data ?? null, error: response.error };
 };
+
+export interface EnrolledCourseRecord {
+  courseId: number;
+  courseCode: string;
+  title: string;
+  semester: string;
+  year: number;
+  advisorName: string | null;
+}
+
+// Courses whose roster contains this email (matched case-insensitively).
+export const listEnrolledCoursesByEmail = async (
+  email: string,
+): Promise<{
+  data: EnrolledCourseRecord[] | null;
+  error: PostgrestError | null;
+}> => {
+  const supabase = getSupabaseAdminClient();
+  // Escape LIKE wildcards so "_" in an address only matches itself.
+  const pattern = email.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
+  const response = await supabase
+    .from("course_roster")
+    .select(
+      "course:course!inner(id, course_code, title, semester, year, advisor:user!course_advisor_id_fkey(name))",
+    )
+    .ilike("email", pattern);
+
+  if (response.error) {
+    return { data: null, error: response.error };
+  }
+
+  type Row = {
+    course: {
+      id: number;
+      course_code: string;
+      title: string | null;
+      semester: string;
+      year: number;
+      advisor: { name: string } | null;
+    } | null;
+  };
+
+  const byId = new Map<number, EnrolledCourseRecord>();
+  for (const row of (response.data ?? []) as unknown as Row[]) {
+    const course = row.course;
+    if (!course || byId.has(course.id)) continue;
+    byId.set(course.id, {
+      courseId: course.id,
+      courseCode: course.course_code,
+      title: course.title || course.course_code,
+      semester: course.semester,
+      year: course.year,
+      advisorName: course.advisor?.name ?? null,
+    });
+  }
+
+  const data = Array.from(byId.values()).sort(
+    (a, b) => b.year - a.year || a.courseCode.localeCompare(b.courseCode),
+  );
+  return { data, error: null };
+};

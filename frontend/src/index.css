@@ -103,3 +103,28 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* Shrinking bar along the bottom of a toast showing time until it closes. */
+@keyframes toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.toast-progress {
+  animation: toast-progress 5000ms linear forwards;
+}
+
+.group:hover .toast-progress {
+  animation-play-state: paused;
+}
+
+/* Stop the browser's rubber-band bounce on the page itself; the dashboard
+   scrolls inside <main>, so the page should never move. */
+html,
+body {
+  overscroll-behavior: none;
+}

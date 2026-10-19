@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -59,6 +59,7 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
   } = useArchiveProjects(authToken);
 
   const navigate = useNavigate();
+  const mainRef = useRef<HTMLElement>(null);
   const location = useLocation();
 
   // Derive current view from URL (fallback to saved state)
@@ -83,6 +84,11 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
       setSelectedProject(savedProject);
     }
   }, []);
+
+  // Only <main> scrolls, so start each newly opened page at the top.
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+  }, [currentView, selectedProject]);
 
   // Save state whenever it changes
   useEffect(() => {
@@ -288,15 +294,22 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    // The page itself never scrolls: the sidebar and header stay in place and
+    // only <main> scrolls. <main> is `relative` so absolutely-positioned helper
+    // elements (e.g. Radix's hidden <select>/<input>) stay inside it instead of
+    // making the whole page taller.
+    <div className="h-screen overflow-hidden bg-gray-50 flex">
       <Sidebar
         user={user}
         currentView={currentView}
         onViewChange={handleViewChange}
       />
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col">
         <Header user={user} onLogout={onLogout} />
-        <main className="flex-1 min-w-0 overflow-x-hidden p-6">
+        <main
+          ref={mainRef}
+          className="relative flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain p-6"
+        >
           {renderContent()}
         </main>
       </div>

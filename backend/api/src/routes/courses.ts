@@ -15,6 +15,7 @@ import {
   listRosterByCourse,
   upsertRosterEntries,
   deleteRosterEntry,
+  listEnrolledCoursesByEmail,
   UpsertRosterInput,
 } from "../services/rosterService";
 
@@ -277,6 +278,31 @@ coursesRouter.post(
         advisorName: resolvedAdvisorName,
       },
     });
+  },
+);
+
+// Courses the signed-in user is enrolled in through a course roster
+coursesRouter.get(
+  "/enrolled",
+  verifyFirebaseAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const email = req.user?.email;
+
+    if (!email) {
+      res
+        .status(400)
+        .json({ error: "Email address missing from authentication token." });
+      return;
+    }
+
+    const { data, error } = await listEnrolledCoursesByEmail(email);
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    res.json({ courses: data ?? [] });
   },
 );
 

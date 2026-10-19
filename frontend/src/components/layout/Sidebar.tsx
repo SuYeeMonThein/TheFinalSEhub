@@ -68,7 +68,7 @@ export const Sidebar = ({ user, currentView, onViewChange }: SidebarProps) => {
   const menuItems = getMenuItems();
 
   return (
-    <div className="w-64 bg-[#06402B] border-r border-[#043823] flex flex-col">
+    <div className="w-64 h-full shrink-0 bg-[#06402B] border-r border-[#043823] flex flex-col">
       <div className="p-6 border-b border-[#043823]">
         <div className="flex items-center space-x-3">
           <div className="flex items-center justify-center">
@@ -87,7 +87,7 @@ export const Sidebar = ({ user, currentView, onViewChange }: SidebarProps) => {
         </div>
       </div>
 
-      <nav className="flex-1 p-4">
+      <nav className="flex-1 min-h-0 overflow-y-auto p-4">
         <ul className="space-y-2">
           {menuItems.map((item) => {
             const Icon = item.icon;

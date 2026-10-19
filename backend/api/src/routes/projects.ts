@@ -26,6 +26,7 @@ import {
   UserRecord,
 } from "../services/userService";
 import { getSupabaseAdminClient } from "../services/supabaseClient";
+import { listEnrolledCoursesByEmail } from "../services/rosterService";
 import { uploadFile, downloadFile, deleteFile } from "../services/storage";
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -364,6 +365,33 @@ const withCourseAdvisorMember = (
   ];
 };
 
+// Students may only attach a project to a course they are enrolled in.
+// Resolves to an error message when the course code is not allowed.
+const checkStudentCourseCode = async (
+  email: string,
+  courseCode: string | null,
+): Promise<{ status: number; error: string } | null> => {
+  if (!courseCode) {
+    return null;
+  }
+
+  const { data, error } = await listEnrolledCoursesByEmail(email);
+  if (error) {
+    return { status: 500, error: error.message };
+  }
+
+  const allowed = (data ?? []).some(
+    (course) => course.courseCode.toLowerCase() === courseCode.toLowerCase(),
+  );
+  return allowed
+    ? null
+    : {
+        status: 400,
+        error:
+          "You can only choose a course you are enrolled in. Ask your coordinator to add you to the course roster.",
+      };
+};
+
 const pickAdvisorFromMembers = (
   members: NormalizedTeamMember[],
 ): NormalizedTeamMember | null => {
@@ -597,6 +625,15 @@ projectsRouter.post(
       completionDate,
       files: rawFiles,
     } = req.body ?? {};
+
+    const courseCheck = await checkStudentCourseCode(
+      submitter.email,
+      normalizeString(courseCode),
+    );
+    if (courseCheck) {
+      res.status(courseCheck.status).json({ error: courseCheck.error });
+      return;
+    }
 
     const normalizedTitle = normalizeString(title);
     const normalizedDescription = normalizeString(description);
@@ -862,6 +899,28 @@ projectsRouter.patch(
       completionDate,
       files: rawFiles,
     } = req.body ?? {};
+
+    // Only check a course code the student is changing, so projects saved
+    // before rosters existed can still be edited.
+    const requestedCourseCode = normalizeString(courseCode);
+    const currentCourseCode =
+      typeof projectRecord.metadata?.courseCode === "string"
+        ? projectRecord.metadata.courseCode
+        : null;
+    if (
+      role === "student" &&
+      requestedCourseCode &&
+      requestedCourseCode.toLowerCase() !== currentCourseCode?.toLowerCase()
+    ) {
+      const courseCheck = await checkStudentCourseCode(
+        requester.email,
+        requestedCourseCode,
+      );
+      if (courseCheck) {
+        res.status(courseCheck.status).json({ error: courseCheck.error });
+        return;
+      }
+    }
 
     const normalizedTitle = normalizeString(title);
     const keywords = normalizeStringArray(rawKeywords);

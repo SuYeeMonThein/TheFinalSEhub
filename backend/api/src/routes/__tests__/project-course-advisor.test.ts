@@ -9,6 +9,7 @@ import {
 } from "../../services/projectService";
 import { findUserByEmail, findUserById } from "../../services/userService";
 import { getSupabaseAdminClient } from "../../services/supabaseClient";
+import { listEnrolledCoursesByEmail } from "../../services/rosterService";
 
 jest.mock("../../middleware/auth", () => ({
   verifyFirebaseAuth: (
@@ -39,6 +40,10 @@ jest.mock("../../services/userService", () => ({
 
 jest.mock("../../services/supabaseClient", () => ({
   getSupabaseAdminClient: jest.fn(),
+}));
+
+jest.mock("../../services/rosterService", () => ({
+  listEnrolledCoursesByEmail: jest.fn(),
 }));
 
 jest.mock("../../services/storage", () => ({
@@ -95,6 +100,17 @@ describe("POST /projects course advisor auto-fill", () => {
     (upsertProjectStudents as jest.Mock).mockResolvedValue({});
     (insertProjectLinks as jest.Mock).mockResolvedValue({});
     (getProjectById as jest.Mock).mockResolvedValue({ data: [] });
+    (listEnrolledCoursesByEmail as jest.Mock).mockResolvedValue({
+      data: ["1305394", "nope"].map((courseCode, i) => ({
+        courseId: i + 1,
+        courseCode,
+        title: courseCode,
+        semester: "1",
+        year: 2026,
+        advisorName: null,
+      })),
+      error: null,
+    });
   });
 
   const created = () => (createProjectRecord as jest.Mock).mock.calls[0][0];
@@ -137,5 +153,14 @@ describe("POST /projects course advisor auto-fill", () => {
         (m: { role: string }) => m.role === "lecturer",
       ),
     ).toBe(false);
+  });
+
+  it("rejects a course the student is not enrolled in", async () => {
+    mockCourse({ id: 5, advisor_id: 7 });
+    const res = await post({ courseCode: "9999999" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/enrolled/);
+    expect(createProjectRecord).not.toHaveBeenCalled();
   });
 });
