@@ -35,13 +35,11 @@ export const createApp = () => {
 
   app.use(express.json());
 
-  // Swagger docs — only accessible in non-production environments
-  if (process.env.NODE_ENV !== "production") {
-    app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-    app.get("/docs.json", (_req, res) => {
-      res.json(swaggerSpec);
-    });
-  }
+  // Swagger docs
+  app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  app.get("/docs.json", (_req, res) => {
+    res.json(swaggerSpec);
+  });
 
   registerRoutes(app);
 

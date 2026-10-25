@@ -12,9 +12,8 @@ const options: { definition: Record<string, any>; apis: string[] } = {
   definition: {
     openapi: "3.1.0",
     info: apiDescription,
-    servers: [
-      { url: "http://localhost:5001", description: "Local development server" },
-    ],
+    // Relative URL so "Try it out" targets whichever host serves the docs
+    servers: [{ url: "/", description: "Current server" }],
     components: {
       securitySchemes: {
         bearerAuth: {
@@ -26,7 +25,8 @@ const options: { definition: Record<string, any>; apis: string[] } = {
     },
     security: [{ bearerAuth: [] }],
   },
-  apis: [path.join(__dirname, "../routes/**/*.ts")],
+  // .ts when running from src (dev), .js when running the compiled build in lib
+  apis: [path.join(__dirname, "../routes/**/*.{ts,js}")],
 };
 
 export const swaggerSpec = swaggerJsdoc(options);
