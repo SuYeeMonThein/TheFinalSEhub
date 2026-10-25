@@ -7,6 +7,7 @@ import { registerRoutes } from "./routes";
 import { swaggerSpec } from "./docs/swagger";
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/errorHandler";
+import { docsLoginLimiter, requireDocsAuth } from "./middleware/docsAuth";
 
 export const createApp = () => {
   const app = express();
@@ -35,9 +36,15 @@ export const createApp = () => {
 
   app.use(express.json());
 
-  // Swagger docs
-  app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-  app.get("/docs.json", (_req, res) => {
+  // Swagger docs — login required (registered Supabase users only)
+  app.use(
+    "/docs",
+    docsLoginLimiter,
+    requireDocsAuth,
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec),
+  );
+  app.get("/docs.json", docsLoginLimiter, requireDocsAuth, (_req, res) => {
     res.json(swaggerSpec);
   });
 

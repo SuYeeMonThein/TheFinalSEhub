@@ -48,36 +48,16 @@ describe("Security middleware", () => {
 
   // ── Fix #8: Swagger docs protection ─────────────────────────────────
   describe("Swagger docs", () => {
-    it("serves /docs in non-production (default test env)", async () => {
-      // In test env (not production), docs should be available
+    // Full login flow is covered in docs-auth.test.ts
+    it("requires login for /docs", async () => {
       const res = await request(app).get("/docs/");
-      // Should return 200 or 301 (redirect to trailing slash), not 404
-      expect([200, 301]).toContain(res.status);
+      expect(res.status).toBe(401);
+      expect(res.headers["www-authenticate"]).toContain("Basic");
     });
 
-    it("blocks /docs in production", async () => {
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = "production";
-
-      // Create a fresh app with production env
-      const prodApp = createApp();
-
-      const res = await request(prodApp).get("/docs/");
-      expect(res.status).toBe(404);
-
-      process.env.NODE_ENV = originalEnv;
-    });
-
-    it("blocks /docs.json in production", async () => {
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = "production";
-
-      const prodApp = createApp();
-
-      const res = await request(prodApp).get("/docs.json");
-      expect(res.status).toBe(404);
-
-      process.env.NODE_ENV = originalEnv;
+    it("requires login for /docs.json", async () => {
+      const res = await request(app).get("/docs.json");
+      expect(res.status).toBe(401);
     });
   });
 });
