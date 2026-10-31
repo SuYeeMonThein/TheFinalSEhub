@@ -2,6 +2,12 @@ import { Router, Response } from "express";
 import { AuthedRequest, verifyFirebaseAuth } from "../middleware/auth";
 import { getSupabaseAdminClient } from "../services/supabaseClient";
 import { findUserByEmail } from "../services/userService";
+import {
+  getProjectAccess,
+  listAccessibleProjectIds,
+} from "../services/projectAccess";
+
+const MAX_COMMENT_LENGTH = 2000;
 
 const commentsRouter = Router();
 
@@ -25,12 +31,25 @@ commentsRouter.get(
     try {
       const supabase = getSupabaseAdminClient();
 
-      // Get all comments
-      const { data: comments, error } = await supabase
+      // Only comments on projects the user is part of (coordinators see all)
+      const accessibleIds = await listAccessibleProjectIds(
+        req.user?.email,
+        req.user?.role,
+      );
+      if (accessibleIds && accessibleIds.length === 0) {
+        res.json({ comments: [] });
+        return;
+      }
+
+      let commentQuery = supabase
         .from("project_comment")
         .select("id, project_id, comment, created_at, user_id")
         .order("created_at", { ascending: false })
         .limit(50);
+      if (accessibleIds) {
+        commentQuery = commentQuery.in("project_id", accessibleIds);
+      }
+      const { data: comments, error } = await commentQuery;
 
       if (error) {
         console.error("[GET /comments/all] error:", error);
@@ -110,6 +129,26 @@ commentsRouter.get(
 
       if (!Number.isFinite(numericProjectId) || numericProjectId <= 0) {
         res.status(400).json({ error: "Invalid project ID" });
+        return;
+      }
+
+      const access = await getProjectAccess(
+        numericProjectId,
+        req.user?.email,
+        req.user?.role,
+      );
+      if (access.error) {
+        res.status(500).json({ error: access.error });
+        return;
+      }
+      if (!access.found) {
+        res.status(404).json({ error: "Project not found" });
+        return;
+      }
+      if (!access.canAccess) {
+        res
+          .status(403)
+          .json({ error: "You do not have access to this project's comments." });
         return;
       }
 
@@ -203,6 +242,32 @@ commentsRouter.post(
 
       if (!comment || typeof comment !== "string" || !comment.trim()) {
         res.status(400).json({ error: "Comment text is required" });
+        return;
+      }
+      if (comment.length > MAX_COMMENT_LENGTH) {
+        res.status(400).json({
+          error: `Comment must be ${MAX_COMMENT_LENGTH} characters or fewer.`,
+        });
+        return;
+      }
+
+      const access = await getProjectAccess(
+        numericProjectId,
+        requesterEmail,
+        req.user?.role,
+      );
+      if (access.error) {
+        res.status(500).json({ error: access.error });
+        return;
+      }
+      if (!access.found) {
+        res.status(404).json({ error: "Project not found" });
+        return;
+      }
+      if (!access.canAccess) {
+        res
+          .status(403)
+          .json({ error: "You do not have access to comment on this project." });
         return;
       }
 

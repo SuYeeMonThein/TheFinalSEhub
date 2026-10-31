@@ -19,4 +19,8 @@ export const registerRoutes = (app: Express): void => {
   app.use("/students", studentsRouter);
   app.use("/comments", commentsRouter);
   app.use("/rubrics", rubricsRouter);
+
+  app.use((_req, res) => {
+    res.status(404).json({ error: "Not found" });
+  });
 };

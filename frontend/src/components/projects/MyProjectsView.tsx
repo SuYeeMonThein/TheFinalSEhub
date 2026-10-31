@@ -463,7 +463,9 @@ export const MyProjectsView = ({
                           if (typeof window !== "undefined") {
                             try {
                               localStorage.setItem("editingProject", projectId);
-                            } catch {}
+                            } catch {
+                              // storage unavailable; ignore
+                            }
                           }
                           if (typeof onEditProject === "function") {
                             onEditProject(projectId);

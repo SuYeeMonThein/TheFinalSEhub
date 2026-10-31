@@ -183,7 +183,7 @@ export const CourseManagement = ({
       );
     },
     onSuccess: (updatedCourse) => {
-      queryClient.setQueryData(["courses", authToken], (prev: any) => {
+      queryClient.setQueryData(["courses", authToken], (prev: unknown) => {
         if (!Array.isArray(prev)) {
           return prev;
         }
@@ -271,7 +271,7 @@ export const CourseManagement = ({
       );
     },
     onSuccess: (updatedCourse) => {
-      queryClient.setQueryData(["courses", authToken], (prev: any) => {
+      queryClient.setQueryData(["courses", authToken], (prev: unknown) => {
         if (!Array.isArray(prev)) {
           return prev;
         }
@@ -310,7 +310,7 @@ export const CourseManagement = ({
       courseCode: "",
       title: "",
       description: "",
-      semester: "" as any,
+      semester: "" as unknown as "1" | "2",
       year: "",
       credits: "",
       instructor: "",
@@ -324,7 +324,6 @@ export const CourseManagement = ({
       courseCode: data.courseCode?.trim() || "",
       title: data.title?.trim() || "",
       description: data.description?.trim() || "",
-      semester: data.semester === "null" ? "" : data.semester,
       year: data.year === "null" ? "" : data.year,
       credits: data.credits === "null" ? "" : data.credits,
       instructor: data.instructor?.trim() || "",
@@ -556,7 +555,7 @@ export const CourseManagement = ({
                   courseCode: "",
                   title: "",
                   description: "",
-                  semester: "" as any,
+                  semester: "" as unknown as "1" | "2",
                   year: "",
                   credits: "",
                   instructor: "",

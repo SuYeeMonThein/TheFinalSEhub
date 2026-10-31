@@ -106,8 +106,31 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
         "clientProjectOverrides",
         JSON.stringify(clientProjectOverrides),
       );
-    } catch {}
+    } catch {
+      // storage unavailable or navigation not possible: nothing to do
+    }
   }, [clientProjectOverrides]);
+
+  // Pages each role may open. The sidebar only shows a role's own pages, but
+  // the address bar can name any page, so the view is checked here as well.
+  const allowedViews: Record<User["role"], string[]> = {
+    student: ["my-projects", "submit-project", "edit-project", "archive", "rubrics", "account-details"],
+    advisor: ["my-projects", "edit-project", "archive", "advisor-course", "rubrics", "account-details"],
+    coordinator: ["my-projects", "edit-project", "archive", "users", "courses", "student-roster", "rubrics", "reports", "account-details"],
+  };
+  const viewAllowed = allowedViews[user.role]?.includes(currentView) ?? false;
+
+  useEffect(() => {
+    if (!viewAllowed) {
+      setCurrentView("my-projects");
+      setSelectedProject(null);
+      try {
+        navigate("/dashboard/my-projects", { replace: true });
+      } catch {
+      // storage unavailable or navigation not possible: nothing to do
+    }
+    }
+  }, [viewAllowed, navigate]);
 
   const handleViewChange = (view: string) => {
     setCurrentView(view);
@@ -115,7 +138,9 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
     // Navigate so history is created
     try {
       navigate(`/dashboard/${view}`);
-    } catch {}
+    } catch {
+      // storage unavailable or navigation not possible: nothing to do
+    }
   };
 
   const handleProjectSelection = (projectId: string, source?: string) => {
@@ -126,22 +151,22 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
     }
   };
 
+  const augmentedProjects: ProjectDto[] = useMemo(() => {
+    if (!projects) return [];
+    return projects.map((p) => {
+      const o = clientProjectOverrides[p.id?.toString?.() ?? ""];
+      if (!o) {
+        return p;
+      }
+
+      // Always trust backend status to avoid stale local overrides showing
+      // outdated state (e.g., still "Under Review" after advisor rejected).
+      const { status: _ignoredStatus, ...safeOverride } = o;
+      return { ...p, ...safeOverride };
+    });
+  }, [projects, clientProjectOverrides]);
+
   const renderContent = () => {
-    const augmentedProjects: ProjectDto[] = useMemo(() => {
-      if (!projects) return [];
-      return projects.map((p) => {
-        const o = clientProjectOverrides[p.id?.toString?.() ?? ""];
-        if (!o) {
-          return p;
-        }
-
-        // Always trust backend status to avoid stale local overrides showing
-        // outdated state (e.g., still "Under Review" after advisor rejected).
-        const { status: _ignoredStatus, ...safeOverride } = o;
-        return { ...p, ...safeOverride };
-      });
-    }, [projects, clientProjectOverrides]);
-
     const handleEditProject = (projectId: string) => {
       // Ensure detail view doesn't take precedence over edit view
       setSelectedProject(null);
@@ -193,7 +218,7 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
       );
     }
 
-    switch (currentView) {
+    switch (viewAllowed ? currentView : "my-projects") {
       case "my-projects":
         return (
           <MyProjectsView
@@ -236,7 +261,7 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
                 keywords: updated.keywords ?? undefined,
                 teamName: updated.teamName ?? undefined,
                 externalLinks: updated.externalLinks ?? undefined,
-                teamMembers: (updated.teamMembers as any) ?? undefined,
+                teamMembers: updated.teamMembers as ProjectDto["teamMembers"],
                 lastModified: new Date().toISOString(),
               };
               handleProjectUpdate(id, mapped, status);
@@ -255,7 +280,7 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
           />
         );
       case "users":
-        return <UserManagement user={user} />;
+        return <UserManagement user={user} authToken={authToken} />;
       case "courses":
         return <CourseManagement user={user} authToken={authToken} />;
       case "advisor-course":

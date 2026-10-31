@@ -174,12 +174,11 @@ export async function sendBulkSignInLinks(
 }
 
 /**
- * Send welcome emails to bulk-uploaded students with their credentials.
- * Same approach as manual user creation – no magic sign-in link.
+ * Send welcome emails to bulk-uploaded students. The email contains a link for
+ * choosing a password; no password is ever sent by email.
  */
 export async function sendBulkWelcomeEmails(
   students: Student[],
-  defaultPassword: string,
 ): Promise<{
   success: number;
   failed: number;
@@ -194,7 +193,6 @@ export async function sendBulkWelcomeEmails(
       await sendWelcomeEmail({
         name: student.name,
         email: student.email,
-        password: defaultPassword,
         role: "student",
       });
       success++;
@@ -213,15 +211,34 @@ export async function sendBulkWelcomeEmails(
 }
 
 /**
- * Send a welcome email via Brevo when a coordinator manually creates a new user.
+ * Send a welcome email via Brevo when an account is created for a user. It
+ * contains a one-time link to choose a password. The password itself is never
+ * put in the email.
  */
 export async function sendWelcomeEmail(input: {
   name: string;
   email: string;
-  password: string;
   role: string;
 }): Promise<void> {
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:8080";
+
+  // One-time link that lets the user choose a password. If it cannot be
+  // generated, the user can still use "Forgot password?" on the login page.
+  let setPasswordLink = frontendUrl;
+  let hasLink = false;
+  try {
+    setPasswordLink = await adminAuth.generatePasswordResetLink(input.email, {
+      url: frontendUrl,
+    });
+    hasLink = true;
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error(
+      "Could not generate a password setup link for",
+      input.email,
+      error instanceof Error ? error.message : error,
+    );
+  }
 
   const html = `
       <!DOCTYPE html>
@@ -246,22 +263,25 @@ export async function sendWelcomeEmail(input: {
           </div>
           <div class="content">
             <p>Hello <strong>${input.name}</strong>,</p>
-            <p>An account has been created for you on SE Project Hub. Here are your login details:</p>
+            <p>An account has been created for you on SE Project Hub.</p>
 
             <div class="info">
-              <p><strong>Your Credentials:</strong></p>
               <p>📧 <strong>Email:</strong> ${input.email}</p>
-              <p>🔑 <strong>Password:</strong> <code style="background:#eef2ff;padding:4px 8px;border-radius:4px;font-size:16px;letter-spacing:1px;">${input.password}</code></p>
               <p>👤 <strong>Role:</strong> ${input.role.charAt(0).toUpperCase() + input.role.slice(1)}</p>
             </div>
 
+            <p>${
+              hasLink
+                ? "Choose your own password to activate your account:"
+                : `Open the sign-in page and choose <strong>Forgot password?</strong> to set your password:`
+            }</p>
+
             <div style="text-align: center;">
-              <a href="${frontendUrl}" class="button">Sign In Now</a>
+              <a href="${setPasswordLink}" class="button">${hasLink ? "Set Your Password" : "Open SE Project Hub"}</a>
             </div>
 
-            <p style="color:#b91c1c;font-weight:bold;">⚠️ Please change your password after your first sign-in via Account Detail.</p>
-
             <div class="footer">
+              ${hasLink ? "<p>This link works once and expires after a while. If it has expired, use “Forgot password?” on the sign-in page.</p>" : ""}
               <p>If you didn't expect this email, please ignore it.</p>
               <p>— SE Project Hub Team</p>
             </div>
@@ -273,7 +293,7 @@ export async function sendWelcomeEmail(input: {
 
   await sendEmailViaBrevo(
     { email: input.email, name: input.name },
-    "Your SE Project Hub Account Has Been Created",
+    "Set up your SE Project Hub account",
     html,
   );
 

@@ -141,8 +141,6 @@ const Index = () => {
         try {
           const fresh = await firebaseUser.getIdToken(/* forceRefresh */ true);
           setAuthToken(fresh);
-          localStorage.setItem("authToken", fresh);
-          localStorage.setItem("firebaseAuthToken", fresh);
 
           // Only reuse a cached profile if it belongs to THIS Firebase
           // account. A leftover profile from a previous person on this
@@ -209,7 +207,6 @@ const Index = () => {
     setUser(userData);
     localStorage.setItem("user", JSON.stringify(userData));
     setAuthToken(token);
-    localStorage.setItem("authToken", token);
 
     // Force role choice resolution on each fresh login.
     setSelectedMockRole(null);

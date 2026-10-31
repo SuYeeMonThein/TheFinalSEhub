@@ -8,8 +8,8 @@ import {
   upsertProjectStudents,
 } from "../../services/projectService";
 import { findUserByEmail, findUserById } from "../../services/userService";
-import { getSupabaseAdminClient } from "../../services/supabaseClient";
 import { listEnrolledCoursesByEmail } from "../../services/rosterService";
+import { findCourseByCode } from "../../services/courseLookup";
 
 jest.mock("../../middleware/auth", () => ({
   verifyFirebaseAuth: (
@@ -42,6 +42,10 @@ jest.mock("../../services/supabaseClient", () => ({
   getSupabaseAdminClient: jest.fn(),
 }));
 
+jest.mock("../../services/courseLookup", () => ({
+  findCourseByCode: jest.fn(),
+}));
+
 jest.mock("../../services/rosterService", () => ({
   listEnrolledCoursesByEmail: jest.fn(),
 }));
@@ -65,17 +69,8 @@ const advisor = {
   role: "advisor",
 };
 
-const mockCourse = (course: unknown) => {
-  (getSupabaseAdminClient as jest.Mock).mockReturnValue({
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({ data: course }),
-          single: async () => ({ data: course }),
-        }),
-      }),
-    }),
-  });
+const mockCourse = (course: { id: number; advisor_id: number } | null) => {
+  (findCourseByCode as jest.Mock).mockResolvedValue(course);
 };
 
 const app = express();

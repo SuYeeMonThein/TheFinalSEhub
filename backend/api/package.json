@@ -15,6 +15,7 @@
     "test:watch": "jest --watch",
     "start": "node lib/server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "reset:student-passwords": "ts-node --transpile-only scripts/resetStudentPasswords.ts",
     "set:coordinator": "ts-node --transpile-only scripts/setCoordinatorRole.ts",
     "set:role:email": "ts-node --transpile-only scripts/setRoleByEmail.ts",
     "storage:create": "ts-node --transpile-only scripts/createSupabaseBucket.ts"

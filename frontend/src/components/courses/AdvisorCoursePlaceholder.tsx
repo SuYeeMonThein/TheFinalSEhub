@@ -292,7 +292,7 @@ export const AdvisorCoursePlaceholder = ({
 
   const handleCourseSelect = (courseId: string) => {
     setSelectedCourseId(courseId);
-    console.log(`Advisor Course placeholder course selected: ${courseId}`);
+    
   };
 
   const handleProjectAction = (projectId: string) => {
@@ -588,8 +588,7 @@ export const AdvisorCoursePlaceholder = ({
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold text-gray-900">Advisor Courses</h1>
         <p className="text-muted-foreground">
-          Quick placeholder view so you can see how advisee courses and projects
-          will eventually surface here.
+          The courses you advise and the student projects submitted to them.
         </p>
       </div>
 
@@ -623,7 +622,7 @@ export const AdvisorCoursePlaceholder = ({
             Your Advisee Courses
           </CardTitle>
           <CardDescription>
-            Placeholder dataset with quick stats so navigation feels real.
+            Project counts and review status for each of your courses.
           </CardDescription>
         </CardHeader>
         <CardContent>

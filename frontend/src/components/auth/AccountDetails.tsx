@@ -84,7 +84,7 @@ export const AccountDetails = ({ user, authToken }: AccountDetailsProps) => {
     if (!/[0-9]/.test(password)) {
       return "Password must contain at least one number.";
     }
-    if (!/[!@#$%^&*()_+\-=\[\]{}|;:'\",.<>?/`~]/.test(password)) {
+    if (!/[!@#$%^&*()_+\-=[\]{}|;:'",.<>?/`~]/.test(password)) {
       return "Password must contain at least one special character.";
     }
     return null;

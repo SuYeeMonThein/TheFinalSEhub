@@ -8,15 +8,21 @@ export interface AnalyticsFilters {
   courseId?: number;
 }
 
+// Matches the object returned by GET /analytics/metrics.
 export interface ProjectMetrics {
   totalProjects: number;
+  approvedProjects: number;
+  pendingProjects: number;
+  rejectedProjects: number;
+  inProgressProjects: number;
+  totalStudents: number;
   activeStudents: number;
   approvalRate: number;
   averageGrade: number | null;
+  averageTeamSize: number;
   highImpactProjects: number;
   pendingReviews: number;
   completedProjects: number;
-  rejectedProjects: number;
 }
 
 export interface SubmissionTrend {

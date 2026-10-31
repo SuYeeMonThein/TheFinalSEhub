@@ -26,8 +26,8 @@ rubricsRouter.use(verifyFirebaseAuth);
 const handleServiceResult = (
   res: Response,
   result: { error: string | null; code?: string },
-  successStatus = 200,
-  successBody?: unknown,
+  _successStatus = 200,
+  _successBody?: unknown,
 ) => {
   if (result.error) {
     if (result.code === TABLE_NOT_FOUND_CODE) {

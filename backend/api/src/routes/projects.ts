@@ -1,4 +1,4 @@
-import { Router, Response, NextFunction } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import multer from "multer";
 import { AuthedRequest, verifyFirebaseAuth } from "../middleware/auth";
 import {
@@ -27,6 +27,8 @@ import {
 } from "../services/userService";
 import { getSupabaseAdminClient } from "../services/supabaseClient";
 import { listEnrolledCoursesByEmail } from "../services/rosterService";
+import { getProjectAccess } from "../services/projectAccess";
+import { findCourseByCode } from "../services/courseLookup";
 import { uploadFile, downloadFile, deleteFile } from "../services/storage";
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -318,17 +320,13 @@ const ensureSubmitterMember = (
 // Look up the advisor assigned to a course by its course code.
 const findCourseAdvisorByCode = async (
   courseCode: string | null,
+  studentEmail?: string,
 ): Promise<{ courseId: number; advisor: UserRecord | null } | null> => {
   if (!courseCode) {
     return null;
   }
 
-  const supabase = getSupabaseAdminClient();
-  const { data: course } = await supabase
-    .from("course")
-    .select("id, advisor_id")
-    .eq("course_code", courseCode)
-    .maybeSingle();
+  const course = await findCourseByCode(courseCode, studentEmail);
 
   if (!course) {
     return null;
@@ -390,6 +388,47 @@ const checkStudentCourseCode = async (
         error:
           "You can only choose a course you are enrolled in. Ask your coordinator to add you to the course roster.",
       };
+};
+
+// Guard for the file routes. Returns true when it has already sent an error.
+// Reading is allowed for the project's team, advisor, coordinators, and for
+// anyone once the project is approved (the public archive). Changing files is
+// limited to team members and coordinators; advisors cannot edit projects.
+const rejectProjectFileAccess = async (
+  req: AuthedRequest,
+  res: Response,
+  projectId: number,
+  mode: "read" | "write",
+): Promise<boolean> => {
+  const role = req.user?.role;
+  const access = await getProjectAccess(projectId, req.user?.email, role);
+
+  if (access.error) {
+    res.status(500).json({ error: access.error });
+    return true;
+  }
+  if (!access.found) {
+    res.status(404).json({ error: "Project not found." });
+    return true;
+  }
+
+  if (mode === "write") {
+    if ((role !== "student" && role !== "coordinator") || !access.canAccess) {
+      res.status(403).json({
+        error: "Only project team members and coordinators can change project files.",
+      });
+      return true;
+    }
+    return false;
+  }
+
+  if (!access.canAccess && !access.isApproved) {
+    res
+      .status(403)
+      .json({ error: "You do not have access to this project's files." });
+    return true;
+  }
+  return false;
 };
 
 const pickAdvisorFromMembers = (
@@ -649,6 +688,7 @@ projectsRouter.post(
     const externalLinks = normalizeStringArray(rawExternalLinks);
     const courseLookup = await findCourseAdvisorByCode(
       normalizeString(courseCode),
+      submitter.email,
     );
     const normalizedMembers = withCourseAdvisorMember(
       ensureSubmitterMember(submitter, normalizeTeamMembers(rawTeamMembers)),
@@ -725,17 +765,8 @@ projectsRouter.post(
     let courseId: number | null = null;
     const normalizedCourseCode = normalizeString(courseCode);
 
-    if (normalizedCourseCode) {
-      const supabase = getSupabaseAdminClient();
-      const { data: course } = await supabase
-        .from("course")
-        .select("id")
-        .eq("course_code", normalizedCourseCode)
-        .single();
-
-      if (course) {
-        courseId = course.id;
-      }
+    if (normalizedCourseCode && courseLookup) {
+      courseId = courseLookup.courseId;
     }
 
     const createResponse = await createProjectRecord({
@@ -927,6 +958,7 @@ projectsRouter.patch(
     const externalLinks = normalizeStringArray(rawExternalLinks);
     const courseLookup = await findCourseAdvisorByCode(
       normalizeString(courseCode),
+      requester.email,
     );
     const normalizedMembers = withCourseAdvisorMember(
       normalizeTeamMembers(rawTeamMembers),
@@ -961,15 +993,8 @@ projectsRouter.patch(
     // Map course code to course id if provided
     let resolvedCourseId: number | undefined;
     const normalizedCourseCode = normalizeString(courseCode);
-    if (normalizedCourseCode) {
-      const { data: course } = await supabase
-        .from("course")
-        .select("id")
-        .eq("course_code", normalizedCourseCode)
-        .single();
-      if (course) {
-        resolvedCourseId = course.id;
-      }
+    if (normalizedCourseCode && courseLookup) {
+      resolvedCourseId = courseLookup.courseId;
     }
 
     const updatePayload = {
@@ -1524,11 +1549,36 @@ projectsRouter.get(
  *       '200':
  *         description: List of approved projects
  */
+const MAX_PAGE_SIZE = 100;
+
+// Paging is optional: no `limit` returns everything (the dashboard relies on that).
+const parsePaging = (
+  query: Request["query"],
+): { limit?: number; page: number } | { error: string } => {
+  const { limit, page } = query;
+  if (limit === undefined && page === undefined) return { page: 1 };
+  const limitNum = limit === undefined ? MAX_PAGE_SIZE : Number(limit);
+  const pageNum = page === undefined ? 1 : Number(page);
+  if (!Number.isInteger(limitNum) || limitNum < 1 || limitNum > MAX_PAGE_SIZE) {
+    return { error: `limit must be a whole number from 1 to ${MAX_PAGE_SIZE}.` };
+  }
+  if (!Number.isInteger(pageNum) || pageNum < 1) {
+    return { error: "page must be a whole number of 1 or more." };
+  }
+  return { limit: limitNum, page: pageNum };
+};
+
 projectsRouter.get(
   "/archive",
   verifyFirebaseAuth,
-  async (_req: AuthedRequest, res: Response) => {
+  async (req: AuthedRequest, res: Response) => {
     try {
+      const paging = parsePaging(req.query);
+      if ("error" in paging) {
+        res.status(400).json({ error: paging.error });
+        return;
+      }
+
       const projectsResult = await listApprovedProjects();
 
       if (projectsResult.error) {
@@ -1540,7 +1590,18 @@ projectsRouter.get(
         return;
       }
 
-      res.json({ projects: formatProjectCollection(projectsResult.data) });
+      const all = formatProjectCollection(projectsResult.data);
+      if (!paging.limit) {
+        res.json({ projects: all });
+        return;
+      }
+      const start = (paging.page - 1) * paging.limit;
+      res.json({
+        projects: all.slice(start, start + paging.limit),
+        total: all.length,
+        page: paging.page,
+        limit: paging.limit,
+      });
     } catch (err) {
       console.error("[GET /projects/archive] unhandled error:", err);
       res.status(500).json({
@@ -1629,6 +1690,10 @@ projectsRouter.post(
 
       if (!uploadedFiles || uploadedFiles.length === 0) {
         res.status(400).json({ error: "No files provided." });
+        return;
+      }
+
+      if (await rejectProjectFileAccess(req, res, projectId, "write")) {
         return;
       }
 
@@ -1745,6 +1810,10 @@ projectsRouter.get(
 
       if (Number.isNaN(projectId)) {
         res.status(400).json({ error: "Invalid project id." });
+        return;
+      }
+
+      if (await rejectProjectFileAccess(req, res, projectId, "read")) {
         return;
       }
 
@@ -1996,6 +2065,10 @@ projectsRouter.delete(
 
       if (Number.isNaN(projectId)) {
         res.status(400).json({ error: "Invalid project id." });
+        return;
+      }
+
+      if (await rejectProjectFileAccess(req, res, projectId, "write")) {
         return;
       }
 

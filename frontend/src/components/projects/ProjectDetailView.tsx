@@ -85,8 +85,12 @@ interface ProjectDetailViewProps {
   onProjectRefresh?: () => void;
 }
 
-export const ProjectDetailView = ({
-  projectId,
+interface ProjectDetailContentProps extends Omit<ProjectDetailViewProps, "projectId"> {
+  project: ExtendedProject;
+}
+
+const ProjectDetailContent = ({
+  project,
   user,
   onBack,
   projects,
@@ -94,7 +98,7 @@ export const ProjectDetailView = ({
   isArchiveView = false,
   authToken,
   onProjectRefresh,
-}: ProjectDetailViewProps) => {
+}: ProjectDetailContentProps) => {
   const { toast } = useToast();
   const [reviewFeedback, setReviewFeedback] = useState("");
   const [selectedAction, setSelectedAction] = useState<string | null>(null);
@@ -105,35 +109,6 @@ export const ProjectDetailView = ({
   const [isViewRubricDialogOpen, setIsViewRubricDialogOpen] = useState(false);
   const [selectedRubricId, setSelectedRubricId] = useState<string>("");
   const queryClient = useQueryClient();
-
-  // Find the correct project by ID
-  const project = projects?.find((p) => p.id.toString() === projectId);
-
-  if (!project) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={onBack}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-900">
-              Project not found
-            </h2>
-            <p className="text-sm text-gray-600">
-              This project may have been removed or is still loading.
-            </p>
-          </div>
-        </div>
-        <Card>
-          <CardContent className="py-10 text-center text-gray-500">
-            No project details available.
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   const canAdvisorSubmitFeedback =
     user.role === "advisor" &&
@@ -1489,4 +1464,39 @@ export const ProjectDetailView = ({
       </Dialog>
     </div>
   );
+};
+
+export const ProjectDetailView = (props: ProjectDetailViewProps) => {
+  const { projectId, projects, onBack } = props;
+  // Find the correct project by ID. Hooks live in ProjectDetailContent so the
+  // not-found early return below never changes the hook order.
+  const project = projects?.find((p) => p.id.toString() === projectId);
+
+  if (!project) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={onBack}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+          <div>
+            <h2 className="text-2xl font-semibold text-gray-900">
+              Project not found
+            </h2>
+            <p className="text-sm text-gray-600">
+              This project may have been removed or is still loading.
+            </p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="py-10 text-center text-gray-500">
+            No project details available.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return <ProjectDetailContent {...props} project={project} />;
 };

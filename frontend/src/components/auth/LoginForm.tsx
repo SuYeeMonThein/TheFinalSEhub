@@ -146,8 +146,6 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
         localStorage.removeItem("emailForSignIn");
 
         const idTokenResult = await result.user.getIdTokenResult(true);
-        localStorage.setItem("firebaseAuthToken", idTokenResult.token);
-        localStorage.setItem("authToken", idTokenResult.token);
 
         // Check if this is first login (user has no password set)
         const hasPasswordProvider = result.user.providerData.some(
@@ -233,8 +231,6 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
       );
       const idTokenResult = await credential.user.getIdTokenResult(true);
 
-      localStorage.setItem("firebaseAuthToken", idTokenResult.token);
-      localStorage.setItem("authToken", idTokenResult.token);
 
       const normalizedRole = resolveRole(idTokenResult.claims.role);
       const resolvedEmail = credential.user.email ?? email;

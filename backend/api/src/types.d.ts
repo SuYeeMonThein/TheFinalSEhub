@@ -14,7 +14,7 @@ declare module "swagger-jsdoc" {
 }
 
 declare module "multer" {
-  import { Request, RequestHandler } from "express";
+  import { RequestHandler } from "express";
   interface File {
     fieldname: string;
     originalname: string;

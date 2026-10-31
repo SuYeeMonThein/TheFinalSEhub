@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +70,7 @@ interface User {
 
 interface UserManagementProps {
   user: User;
+  authToken?: string | null;
 }
 
 interface DualRoleSelection {
@@ -77,14 +78,14 @@ interface DualRoleSelection {
   coordinator: boolean;
 }
 
-export const UserManagement = ({ user }: UserManagementProps) => {
+export const UserManagement = ({ user, authToken }: UserManagementProps) => {
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isCsvUploadOpen, setIsCsvUploadOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
@@ -150,9 +151,11 @@ export const UserManagement = ({ user }: UserManagementProps) => {
     }
   };
 
-  const getAuthToken = () =>
-    localStorage.getItem("firebaseAuthToken") ??
-    localStorage.getItem("authToken");
+  // The token comes from the dashboard (kept fresh there); it is not stored in
+  // localStorage. A ref keeps memoized callbacks from using a stale token.
+  const authTokenRef = useRef<string | null>(authToken ?? null);
+  authTokenRef.current = authToken ?? null;
+  const getAuthToken = () => authTokenRef.current;
 
   const isDualRoleEligible = (role: User["role"]): boolean =>
     role === "advisor" || role === "coordinator";
@@ -445,7 +448,7 @@ export const UserManagement = ({ user }: UserManagementProps) => {
     setIsDeletingBulk(false);
   };
 
-  const handleEditUser = (userToEdit: any) => {
+  const handleEditUser = (userToEdit: User) => {
     setEditingUser(userToEdit);
     setNewUser({
       name: userToEdit.name,

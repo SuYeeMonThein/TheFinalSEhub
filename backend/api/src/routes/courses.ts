@@ -4,6 +4,7 @@ import { validate } from "../middleware/validate";
 import { createCourseSchema } from "../middleware/schemas";
 import { getSupabaseAdminClient } from "../services/supabaseClient";
 import { findUserByEmail, findUserById } from "../services/userService";
+import { findCourseByCode } from "../services/courseLookup";
 import {
   listProjectsByCourse,
   ProjectWithRelations,
@@ -318,22 +319,20 @@ coursesRouter.get(
       return;
     }
 
-    const supabase = getSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("course")
-      .select("advisor:user!course_advisor_id_fkey(id, name, email)")
-      .eq("course_code", courseCode)
-      .maybeSingle();
+    const course = await findCourseByCode(courseCode, req.user?.email);
 
-    if (error) {
-      res.status(500).json({ error: error.message });
+    if (!course || !course.advisor_id) {
+      res.json({ advisor: null });
       return;
     }
 
-    const advisor = (
-      data as { advisor?: { name: string; email: string } | null } | null
-    )?.advisor;
+    const advisorResponse = await findUserById(course.advisor_id);
+    if (advisorResponse.error) {
+      res.status(500).json({ error: advisorResponse.error.message });
+      return;
+    }
 
+    const advisor = advisorResponse.data;
     res.json({
       advisor: advisor ? { name: advisor.name, email: advisor.email } : null,
     });
@@ -363,6 +362,16 @@ coursesRouter.get(
 
     const user = userResponse.data;
     const role = req.user?.role ?? user.role;
+
+    // Students only see the courses they are enrolled in (GET /courses/enrolled);
+    // the full list includes advisor emails and is for staff.
+    if (role !== "advisor" && role !== "coordinator") {
+      res
+        .status(403)
+        .json({ error: "Only advisors and coordinators can list all courses." });
+      return;
+    }
+
     const supabase = getSupabaseAdminClient();
 
     let coursesQuery = supabase.from("course").select(`
@@ -609,8 +618,38 @@ coursesRouter.get(
   verifyFirebaseAuth,
   async (req: AuthedRequest, res: Response) => {
     const { courseId } = req.params;
+    const numericCourseId = parseInt(courseId, 10);
 
-    const projectsResult = await listProjectsByCourse(parseInt(courseId));
+    if (!Number.isFinite(numericCourseId) || numericCourseId <= 0) {
+      res.status(400).json({ error: "Invalid course identifier." });
+      return;
+    }
+
+    // Coordinators see any course; an advisor only the courses assigned to them.
+    if (req.user?.role !== "coordinator") {
+      if (req.user?.role !== "advisor") {
+        res.status(403).json({
+          error: "Only the course advisor or a coordinator can view course projects.",
+        });
+        return;
+      }
+
+      const advisorLookup = await findUserByEmail(req.user?.email ?? "");
+      const { data: course } = await getSupabaseAdminClient()
+        .from("course")
+        .select("advisor_id")
+        .eq("id", numericCourseId)
+        .maybeSingle();
+
+      if (!advisorLookup.data || !course || course.advisor_id !== advisorLookup.data.id) {
+        res.status(403).json({
+          error: "Only the course advisor or a coordinator can view course projects.",
+        });
+        return;
+      }
+    }
+
+    const projectsResult = await listProjectsByCourse(numericCourseId);
 
     if (projectsResult.error) {
       res.status(500).json({ error: projectsResult.error.message });

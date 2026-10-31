@@ -1,5 +1,6 @@
 import { Router, Response } from "express";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 import {
   AuthedRequest,
   requireCoordinator,
@@ -147,8 +148,9 @@ studentsRouter.post(
       }
 
       // Create Firebase auth accounts and Supabase user records for each student
-      const defaultPassword = "Student@123";
-      const passwordHash = await bcrypt.hash(defaultPassword, 12);
+      // Every account gets its own random password that nobody knows. Students
+      // choose their own through the link in the welcome email.
+      const newRandomPassword = () => `${randomBytes(18).toString("base64url")}aA1!`;
 
       for (const student of validStudents) {
         try {
@@ -160,10 +162,11 @@ studentsRouter.post(
 
           // Create Firebase auth user (or get existing)
           let firebaseUid: string | null = null;
+          const initialPassword = newRandomPassword();
           try {
             const firebaseUser = await adminAuth.createUser({
               email: student.email,
-              password: defaultPassword,
+              password: initialPassword,
               displayName: student.name,
             });
             firebaseUid = firebaseUser.uid;
@@ -180,11 +183,8 @@ studentsRouter.post(
                 const existingUser = await adminAuth.getUserByEmail(
                   student.email,
                 );
+                // Keep the existing account and its password untouched.
                 firebaseUid = existingUser.uid;
-                // Reset password to the default so Student@123 works after logout
-                await adminAuth.updateUser(existingUser.uid, {
-                  password: defaultPassword,
-                });
               } catch {
                 // eslint-disable-next-line no-console
                 console.error(
@@ -211,7 +211,7 @@ studentsRouter.post(
           await createUser({
             name: student.name,
             email: student.email,
-            passwordHash,
+            passwordHash: await bcrypt.hash(initialPassword, 12),
             role: "student",
           });
         } catch (userError) {
@@ -227,10 +227,7 @@ studentsRouter.post(
       let emailResults = { success: 0, failed: 0, errors: [] as string[] };
 
       if (sendEmails && validStudents.length > 0) {
-        emailResults = await sendBulkWelcomeEmails(
-          validStudents,
-          defaultPassword,
-        );
+        emailResults = await sendBulkWelcomeEmails(validStudents);
       }
 
       res.status(201).json({
@@ -264,6 +261,7 @@ studentsRouter.post(
 studentsRouter.get(
   "/",
   verifyFirebaseAuth,
+  requireCoordinator,
   async (_req: AuthedRequest, res: Response) => {
     try {
       const supabase = getSupabaseAdminClient();
@@ -327,16 +325,13 @@ studentsRouter.post(
         return;
       }
 
-      const emailResults = await sendBulkWelcomeEmails(
-        [
-          {
-            name: student.name,
-            email: student.email,
-            rollNumber: student.roll_number,
-          },
-        ],
-        "Student@123",
-      );
+      const emailResults = await sendBulkWelcomeEmails([
+        {
+          name: student.name,
+          email: student.email,
+          rollNumber: student.roll_number,
+        },
+      ]);
 
       res.json({
         message:

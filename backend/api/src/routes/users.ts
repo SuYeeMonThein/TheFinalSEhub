@@ -20,6 +20,38 @@ import { getSupabaseAdminClient } from "../services/supabaseClient";
 import { sendWelcomeEmail } from "../services/emailService";
 import { upsertRosterEntries } from "../services/rosterService";
 
+// Accounts other than `excludeUserId` that hold the coordinator role. Used to
+// make sure the last coordinator cannot be demoted or deleted, which would
+// lock everyone out of user, course, roster and report management.
+const countOtherCoordinators = async (
+  excludeUserId: number,
+): Promise<number> => {
+  const supabase = getSupabaseAdminClient();
+  const ids = new Set<number>();
+
+  const { data: primary } = await supabase
+    .from("user")
+    .select("id")
+    .eq("role", "coordinator")
+    .neq("id", excludeUserId);
+  (primary ?? []).forEach((row) => ids.add(row.id));
+
+  // user_roles may not exist before the multi-role migration; ignore errors.
+  const { data: extra, error } = await supabase
+    .from("user_roles")
+    .select("user_id")
+    .eq("role", "coordinator")
+    .neq("user_id", excludeUserId);
+  if (!error) {
+    (extra ?? []).forEach((row) => ids.add(row.user_id));
+  }
+
+  return ids.size;
+};
+
+const LAST_COORDINATOR_ERROR =
+  "At least one coordinator must remain. Make another user a coordinator first.";
+
 const usersRouter = Router();
 
 const ASSIGNABLE_ROLES: UserRole[] = ["student", "advisor", "coordinator"];
@@ -282,8 +314,8 @@ usersRouter.post(
       }
     }
 
-    // Send welcome email via Resend (non-blocking – don't fail the request)
-    sendWelcomeEmail({ name, email, password, role: parsedRole }).catch((err) =>
+    // Email a link for choosing a password (non-blocking – don't fail the request)
+    sendWelcomeEmail({ name, email, role: parsedRole }).catch((err) =>
       console.error("Welcome email error:", err),
     );
 
@@ -474,6 +506,16 @@ usersRouter.patch(
 
     if (!existingUser) {
       res.status(404).json({ error: "User not found." });
+      return;
+    }
+
+    if (
+      parsedRole &&
+      parsedRole !== "coordinator" &&
+      existingUser.role === "coordinator" &&
+      (await countOtherCoordinators(numericId)) === 0
+    ) {
+      res.status(400).json({ error: LAST_COORDINATOR_ERROR });
       return;
     }
 
@@ -805,6 +847,15 @@ usersRouter.put(
       return;
     }
 
+    if (
+      !parsedRoles.includes("coordinator") &&
+      existingUser.role === "coordinator" &&
+      (await countOtherCoordinators(numericId)) === 0
+    ) {
+      res.status(400).json({ error: LAST_COORDINATOR_ERROR });
+      return;
+    }
+
     const syncRolesResult = await replaceAssignedRoles(numericId, parsedRoles);
 
     if (syncRolesResult.error) {
@@ -871,6 +922,14 @@ usersRouter.delete(
 
     if (!existingUser) {
       res.status(404).json({ error: "User not found." });
+      return;
+    }
+
+    if (
+      existingUser.role === "coordinator" &&
+      (await countOtherCoordinators(numericId)) === 0
+    ) {
+      res.status(400).json({ error: LAST_COORDINATOR_ERROR });
       return;
     }
 

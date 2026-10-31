@@ -264,6 +264,7 @@ export const ProjectComments = ({
           <Textarea
             placeholder="Write a comment..."
             value={newComment}
+            maxLength={2000}
             onChange={(e) => setNewComment(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
