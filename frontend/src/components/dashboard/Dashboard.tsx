@@ -115,8 +115,8 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
   // the address bar can name any page, so the view is checked here as well.
   const allowedViews: Record<User["role"], string[]> = {
     student: ["my-projects", "submit-project", "edit-project", "archive", "rubrics", "account-details"],
-    advisor: ["my-projects", "edit-project", "archive", "advisor-course", "rubrics", "account-details"],
-    coordinator: ["my-projects", "edit-project", "archive", "users", "courses", "student-roster", "rubrics", "reports", "account-details"],
+    advisor: ["my-projects", "archive", "advisor-course", "rubrics", "account-details"],
+    coordinator: ["my-projects", "archive", "users", "courses", "student-roster", "rubrics", "reports", "account-details"],
   };
   const viewAllowed = allowedViews[user.role]?.includes(currentView) ?? false;
 

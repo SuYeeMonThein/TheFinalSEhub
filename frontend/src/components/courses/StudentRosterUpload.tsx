@@ -68,6 +68,7 @@ interface StudentRecord {
   year: string;
   status: "active" | "enrolled" | "error";
   errorMessage?: string;
+  rowNumber?: number;
 }
 
 interface StudentRosterUploadProps {
@@ -100,6 +101,11 @@ export const StudentRosterUpload = ({
   const [newStudentsByCourse, setNewStudentsByCourse] = useState<
     Record<string, string[]>
   >({});
+  // Rows from the last uploaded file that could not be enrolled, per course
+  const [rowErrorsByCourse, setRowErrorsByCourse] = useState<
+    Record<string, StudentRecord[]>
+  >({});
+  const rowErrors = rowErrorsByCourse[selectedCourse] ?? [];
 
   // Load courses from backend
   const { data: courseData = [] } = useCourses(authToken || null);
@@ -189,6 +195,8 @@ export const StudentRosterUpload = ({
     };
 
     reader.readAsText(file);
+    // Let the same file be chosen again after it has been fixed
+    event.target.value = "";
   };
 
   const persistUpload = async (students: StudentRecord[]) => {
@@ -207,6 +215,26 @@ export const StudentRosterUpload = ({
 
       if (!authToken || !selectedCourse) {
         throw new Error("Missing course selection or auth token.");
+      }
+
+      const errorRows = students.filter((s) => s.status === "error");
+      setRowErrorsByCourse((prev) => ({ ...prev, [selectedCourse]: errorRows }));
+
+      if (toSend.length === 0) {
+        const result = {
+          total: students.length,
+          successful: 0,
+          failed: errorRows.length,
+        };
+        setUploadResults(result);
+        setResultsByCourse((prev) => ({ ...prev, [selectedCourse]: result }));
+        toast({
+          title: "No Valid Rows",
+          description:
+            "Every row in the file has a problem. See the error list, fix the file and upload it again.",
+          variant: "destructive",
+        });
+        return;
       }
 
       setUploadProgress(40);
@@ -270,7 +298,10 @@ export const StudentRosterUpload = ({
 
       toast({
         title: "Upload Complete",
-        description: `Successfully enrolled ${successful} students. ${failed} failed.`,
+        description:
+          failed > 0
+            ? `Enrolled ${toSend.length} students. ${failed} rows had errors; see the list under Upload Results.`
+            : `Successfully enrolled ${toSend.length} students.`,
       });
     } catch (e) {
       toast({
@@ -295,6 +326,29 @@ export const StudentRosterUpload = ({
     a.style.display = "none";
     a.href = url;
     a.download = "student_roster_template.csv";
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
+
+  const downloadErrorReport = () => {
+    const quote = (value: string | number | undefined) =>
+      `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csvContent = [
+      "row,student_id,name,email,year,problem",
+      ...rowErrors.map((s) =>
+        [s.rowNumber, s.studentId, s.name, s.email, s.year, s.errorMessage]
+          .map(quote)
+          .join(","),
+      ),
+    ].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.style.display = "none";
+    a.href = url;
+    a.download = "roster_upload_errors.csv";
     document.body.appendChild(a);
     a.click();
     window.URL.revokeObjectURL(url);
@@ -460,6 +514,51 @@ export const StudentRosterUpload = ({
                     </span>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {rowErrors.length > 0 && (
+            <Card className="border-red-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                  Rows With Errors
+                  <Badge className="bg-red-100 text-red-800">
+                    {rowErrors.length}
+                  </Badge>
+                </CardTitle>
+                <CardDescription>
+                  These rows were not enrolled. Fix them in your file and upload
+                  it again; rows already enrolled are not duplicated.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <ul className="max-h-72 overflow-y-auto space-y-2 text-sm">
+                  {rowErrors.map((row) => (
+                    <li
+                      key={row.id}
+                      className="rounded-md border border-red-100 bg-red-50 p-2"
+                    >
+                      <p className="font-medium text-red-800">
+                        Row {row.rowNumber}: {row.errorMessage}
+                      </p>
+                      <p className="text-xs text-gray-600 break-all">
+                        {[row.studentId, row.name, row.email]
+                          .filter(Boolean)
+                          .join(" · ") || "(empty row)"}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  variant="outline"
+                  onClick={downloadErrorReport}
+                  className="w-full"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Error Report
+                </Button>
               </CardContent>
             </Card>
           )}

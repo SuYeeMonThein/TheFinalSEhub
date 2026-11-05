@@ -393,7 +393,7 @@ const checkStudentCourseCode = async (
 // Guard for the file routes. Returns true when it has already sent an error.
 // Reading is allowed for the project's team, advisor, coordinators, and for
 // anyone once the project is approved (the public archive). Changing files is
-// limited to team members and coordinators; advisors cannot edit projects.
+// limited to team members; coordinators and advisors cannot edit projects.
 const rejectProjectFileAccess = async (
   req: AuthedRequest,
   res: Response,
@@ -413,9 +413,9 @@ const rejectProjectFileAccess = async (
   }
 
   if (mode === "write") {
-    if ((role !== "student" && role !== "coordinator") || !access.canAccess) {
+    if (role !== "student" || !access.canAccess) {
       res.status(403).json({
-        error: "Only project team members and coordinators can change project files.",
+        error: "Only project team members can change project files.",
       });
       return true;
     }
@@ -846,10 +846,12 @@ projectsRouter.patch(
     const requesterEmail = req.user?.email;
     const { projectId } = req.params;
 
-    if (role === "advisor") {
+    // Only the project's own students may edit it. Coordinators and advisors
+    // review projects but do not change them.
+    if (role !== "student") {
       res
         .status(403)
-        .json({ error: "Advisors cannot update project details." });
+        .json({ error: "Only project team members can update project details." });
       return;
     }
 
@@ -891,7 +893,7 @@ projectsRouter.patch(
 
     const supabase = getSupabaseAdminClient();
 
-    // Coordinators can edit any project; students must be a team member
+    // Students must be a team member
     if (role === "student") {
       const membership = await supabase
         .from("team_member")

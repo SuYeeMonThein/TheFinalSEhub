@@ -452,8 +452,8 @@ export const MyProjectsView = ({
                       : "View"}
                   </Button>
 
-                  {/* Show Edit for students and coordinators when project is Rejected or Under Review */}
-                  {user.role !== "advisor" &&
+                  {/* Show Edit for students when project is Rejected or Under Review */}
+                  {user.role === "student" &&
                     (normalizeStatus(project.status) === "rejected" ||
                       normalizeStatus(project.status) === "under review") && (
                       <Button
