@@ -1808,7 +1808,8 @@ projectsRouter.get(
   async (req: AuthedRequest, res: Response) => {
     try {
       const projectId = parseInt(req.params.id, 10);
-      const requestedFilename = decodeURIComponent(req.params.filename);
+      // Express has already decoded the path; decoding again breaks names with "%".
+      const requestedFilename = req.params.filename;
 
       if (Number.isNaN(projectId)) {
         res.status(400).json({ error: "Invalid project id." });
@@ -2063,7 +2064,8 @@ projectsRouter.delete(
   async (req: AuthedRequest, res: Response) => {
     try {
       const projectId = parseInt(req.params.id, 10);
-      const requestedFilename = decodeURIComponent(req.params.filename);
+      // Express has already decoded the path; decoding again breaks names with "%".
+      const requestedFilename = req.params.filename;
 
       if (Number.isNaN(projectId)) {
         res.status(400).json({ error: "Invalid project id." });

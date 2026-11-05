@@ -389,8 +389,10 @@ export const downloadProjectFile = async (
   a.download = filename;
   document.body.appendChild(a);
   a.click();
-  window.URL.revokeObjectURL(url);
   document.body.removeChild(a);
+  // Revoking right after click() can cancel the download in some browsers,
+  // so free the file only once the browser has started saving it.
+  setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 };
 
 /**
