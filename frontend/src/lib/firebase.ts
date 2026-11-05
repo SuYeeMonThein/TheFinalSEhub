@@ -1,5 +1,10 @@
 import { getApps, initializeApp, type FirebaseOptions } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import {
+  browserSessionPersistence,
+  getAuth,
+  initializeAuth,
+  type Auth,
+} from "firebase/auth";
 
 const firebaseConfig: FirebaseOptions = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -19,4 +24,18 @@ if (missingKeys.length > 0) {
 }
 
 export const firebaseApp = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
-export const auth = getAuth(firebaseApp);
+// Keep the sign-in only for the current browser session: it survives page
+// refreshes and new tabs, but closing the browser signs the user out, so the
+// next visit starts at the login page instead of a remembered dashboard.
+const createAuth = (): Auth => {
+  try {
+    return initializeAuth(firebaseApp, {
+      persistence: browserSessionPersistence,
+    });
+  } catch {
+    // Already initialized (e.g. after a hot reload in development).
+    return getAuth(firebaseApp);
+  }
+};
+
+export const auth = createAuth();
