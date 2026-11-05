@@ -108,6 +108,21 @@ describe("POST /users", () => {
     expect(await bcrypt.compare("Secret123!", passwordHash)).toBe(true);
   });
 
+  it("rejects a weak password with a message listing the rules", async () => {
+    const response = await request(buildApp())
+      .post("/users")
+      .send({
+        name: "Weak",
+        email: "weak@example.com",
+        password: "3128",
+        role: "student",
+      })
+      .expect(400);
+
+    expect(response.body.error).toMatch(/uppercase letter/);
+    expect(createUserMock).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid roles", async () => {
     const response = await request(buildApp())
       .post("/users")

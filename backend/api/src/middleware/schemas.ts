@@ -29,6 +29,13 @@ export const createCourseSchema = z.object({
 const passwordRegex =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{}|;:'",.<>?/`~]).{8,}$/;
 
+export const PASSWORD_RULES_MESSAGE =
+  "Password must be at least 8 characters and contain an uppercase letter, a lowercase letter, a number, and a special character.";
+
+/** True when the password meets the account password rules. */
+export const isStrongPassword = (password: string): boolean =>
+  passwordRegex.test(password);
+
 export const changePasswordSchema = z.object({
   newPassword: z
     .string()

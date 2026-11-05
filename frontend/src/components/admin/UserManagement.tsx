@@ -38,8 +38,11 @@ import {
   Download,
   Eye,
   EyeOff,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PASSWORD_RULES, unmetPasswordRules } from "@/utils/passwordRules";
 import {
   ApiError,
   CreateUserRequest,
@@ -256,6 +259,16 @@ export const UserManagement = ({ user, authToken }: UserManagementProps) => {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const missingRules = unmetPasswordRules(newUser.password);
+    if (missingRules.length > 0) {
+      toast({
+        title: "Password is too weak",
+        description: `The password still needs: ${missingRules.join(", ")}.`,
         variant: "destructive",
       });
       return;
@@ -508,6 +521,15 @@ export const UserManagement = ({ user, authToken }: UserManagementProps) => {
     }
 
     if (trimmedPassword.length > 0) {
+      const missingRules = unmetPasswordRules(trimmedPassword);
+      if (missingRules.length > 0) {
+        toast({
+          title: "Password is too weak",
+          description: `The new password still needs: ${missingRules.join(", ")}.`,
+          variant: "destructive",
+        });
+        return;
+      }
       updates.password = trimmedPassword;
     }
 
@@ -1200,6 +1222,33 @@ export const UserManagement = ({ user, authToken }: UserManagementProps) => {
                       )}
                     </Button>
                   </div>
+                  {/* Live checklist so the coordinator sees what the password still needs */}
+                  {(!editingUser || newUser.password.length > 0) && (
+                    <ul
+                      className="mt-2 space-y-1 text-sm"
+                      aria-label="Password requirements"
+                    >
+                      {PASSWORD_RULES.map((rule) => {
+                        const met = rule.test(newUser.password);
+                        const Icon = met ? CheckCircle2 : XCircle;
+                        return (
+                          <li
+                            key={rule.label}
+                            className={`flex items-center gap-2 ${
+                              met
+                                ? "text-green-700"
+                                : newUser.password.length > 0
+                                  ? "text-red-600"
+                                  : "text-gray-500"
+                            }`}
+                          >
+                            <Icon className="h-4 w-4 shrink-0" />
+                            <span>{rule.label}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
                 <div className="flex justify-end space-x-2">
                   <Button

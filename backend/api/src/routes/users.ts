@@ -19,6 +19,18 @@ import { adminAuth } from "../config/firebase";
 import { getSupabaseAdminClient } from "../services/supabaseClient";
 import { sendWelcomeEmail } from "../services/emailService";
 import { upsertRosterEntries } from "../services/rosterService";
+import {
+  PASSWORD_RULES_MESSAGE,
+  isStrongPassword,
+} from "../middleware/schemas";
+
+// Firebase error codes for a password it refuses (too short or against the
+// project's password policy).
+const WEAK_PASSWORD_CODES = new Set([
+  "auth/invalid-password",
+  "auth/weak-password",
+  "auth/password-does-not-meet-requirements",
+]);
 
 // Accounts other than `excludeUserId` that hold the coordinator role. Used to
 // make sure the last coordinator cannot be demoted or deleted, which would
@@ -252,6 +264,11 @@ usersRouter.post(
       return;
     }
 
+    if (typeof password !== "string" || !isStrongPassword(password)) {
+      res.status(400).json({ error: PASSWORD_RULES_MESSAGE });
+      return;
+    }
+
     let firebaseUid: string | null = null;
 
     try {
@@ -271,6 +288,11 @@ usersRouter.post(
 
       if (code === "auth/email-already-exists") {
         res.status(409).json({ error: "Email address already in use." });
+        return;
+      }
+
+      if (code && WEAK_PASSWORD_CODES.has(code)) {
+        res.status(400).json({ error: PASSWORD_RULES_MESSAGE });
         return;
       }
 
@@ -492,6 +514,15 @@ usersRouter.patch(
 
     if (role && !parsedRole) {
       res.status(400).json({ error: "Invalid role provided." });
+      return;
+    }
+
+    if (
+      typeof password === "string" &&
+      password.trim().length > 0 &&
+      !isStrongPassword(password.trim())
+    ) {
+      res.status(400).json({ error: PASSWORD_RULES_MESSAGE });
       return;
     }
 
