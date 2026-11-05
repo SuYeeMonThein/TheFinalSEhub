@@ -185,7 +185,8 @@ export const ProjectSubmissionForm = ({
 }: ProjectSubmissionFormProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  // Students pick a course from the ones they are enrolled in; other roles
+  // Students pick from the courses open to them (any course with an assigned
+  // advisor, plus courses whose roster lists them); other roles
   // (e.g. coordinators editing a project) keep the free-text field.
   const isStudent = user.role === "student";
   const NO_COURSE = "__none__";
@@ -1147,8 +1148,8 @@ export const ProjectSubmissionForm = ({
                     </Select>
                     {!enrolledCoursesLoading && enrolledCourses.length === 0 && (
                       <p className="text-sm text-muted-foreground mt-1">
-                        You are not enrolled in any course yet. Ask your
-                        coordinator to add you to a course roster.
+                        No courses are open for submissions yet. Ask your
+                        coordinator to create a course and assign an advisor.
                       </p>
                     )}
                   </>
