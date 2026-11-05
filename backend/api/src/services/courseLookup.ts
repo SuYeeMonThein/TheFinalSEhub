@@ -9,7 +9,7 @@ export interface CourseMatch {
 /**
  * Find a course by its code. The same code can exist in several semesters or
  * years, so when more than one course matches this prefers the one the given
- * student is enrolled in, then the most recent one with an advisor.
+ * student is enrolled in, then the most recent one.
  */
 export const findCourseByCode = async (
   courseCode: string,
@@ -39,8 +39,5 @@ export const findCourseByCode = async (
     }
   }
 
-  // Otherwise the most recent offering that has an advisor, so the
-  // submission reaches someone; failing that, simply the most recent.
-  const best = rows.find((row) => row.advisor_id !== null) ?? rows[0];
-  return { id: best.id, advisor_id: best.advisor_id };
+  return { id: rows[0].id, advisor_id: rows[0].advisor_id };
 };

@@ -8,7 +8,7 @@ import {
   upsertProjectStudents,
 } from "../../services/projectService";
 import { findUserByEmail, findUserById } from "../../services/userService";
-import { listAvailableCoursesByEmail } from "../../services/rosterService";
+import { listEnrolledCoursesByEmail } from "../../services/rosterService";
 import { findCourseByCode } from "../../services/courseLookup";
 
 jest.mock("../../middleware/auth", () => ({
@@ -47,7 +47,7 @@ jest.mock("../../services/courseLookup", () => ({
 }));
 
 jest.mock("../../services/rosterService", () => ({
-  listAvailableCoursesByEmail: jest.fn(),
+  listEnrolledCoursesByEmail: jest.fn(),
 }));
 
 jest.mock("../../services/storage", () => ({
@@ -95,7 +95,7 @@ describe("POST /projects course advisor auto-fill", () => {
     (upsertProjectStudents as jest.Mock).mockResolvedValue({});
     (insertProjectLinks as jest.Mock).mockResolvedValue({});
     (getProjectById as jest.Mock).mockResolvedValue({ data: [] });
-    (listAvailableCoursesByEmail as jest.Mock).mockResolvedValue({
+    (listEnrolledCoursesByEmail as jest.Mock).mockResolvedValue({
       data: ["1305394", "nope"].map((courseCode, i) => ({
         courseId: i + 1,
         courseCode,
@@ -150,12 +150,12 @@ describe("POST /projects course advisor auto-fill", () => {
     ).toBe(false);
   });
 
-  it("rejects a course that is not open to the student", async () => {
+  it("rejects a course the student is not enrolled in", async () => {
     mockCourse({ id: 5, advisor_id: 7 });
     const res = await post({ courseCode: "9999999" });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/not open for submissions/);
+    expect(res.body.error).toMatch(/enrolled/);
     expect(createProjectRecord).not.toHaveBeenCalled();
   });
 });

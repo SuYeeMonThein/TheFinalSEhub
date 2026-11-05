@@ -16,7 +16,7 @@ import {
   listRosterByCourse,
   upsertRosterEntries,
   deleteRosterEntry,
-  listAvailableCoursesByEmail,
+  listEnrolledCoursesByEmail,
   UpsertRosterInput,
 } from "../services/rosterService";
 
@@ -282,8 +282,7 @@ coursesRouter.post(
   },
 );
 
-// Courses the signed-in student can submit to: every course with an assigned
-// advisor, plus any course whose roster lists them
+// Courses the signed-in user is enrolled in through a course roster
 coursesRouter.get(
   "/enrolled",
   verifyFirebaseAuth,
@@ -297,7 +296,7 @@ coursesRouter.get(
       return;
     }
 
-    const { data, error } = await listAvailableCoursesByEmail(email);
+    const { data, error } = await listEnrolledCoursesByEmail(email);
 
     if (error) {
       res.status(500).json({ error: error.message });
@@ -364,7 +363,7 @@ coursesRouter.get(
     const user = userResponse.data;
     const role = req.user?.role ?? user.role;
 
-    // Students only see the courses open to them (GET /courses/enrolled);
+    // Students only see the courses they are enrolled in (GET /courses/enrolled);
     // the full list includes advisor emails and is for staff.
     if (role !== "advisor" && role !== "coordinator") {
       res

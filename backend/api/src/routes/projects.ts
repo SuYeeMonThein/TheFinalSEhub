@@ -26,7 +26,7 @@ import {
   UserRecord,
 } from "../services/userService";
 import { getSupabaseAdminClient } from "../services/supabaseClient";
-import { listAvailableCoursesByEmail } from "../services/rosterService";
+import { listEnrolledCoursesByEmail } from "../services/rosterService";
 import { getProjectAccess } from "../services/projectAccess";
 import { findCourseByCode } from "../services/courseLookup";
 import { uploadFile, downloadFile, deleteFile } from "../services/storage";
@@ -363,8 +363,7 @@ const withCourseAdvisorMember = (
   ];
 };
 
-// Students may only attach a project to a course open to them: one with an
-// assigned advisor, or one whose roster lists them.
+// Students may only attach a project to a course they are enrolled in.
 // Resolves to an error message when the course code is not allowed.
 const checkStudentCourseCode = async (
   email: string,
@@ -374,7 +373,7 @@ const checkStudentCourseCode = async (
     return null;
   }
 
-  const { data, error } = await listAvailableCoursesByEmail(email);
+  const { data, error } = await listEnrolledCoursesByEmail(email);
   if (error) {
     return { status: 500, error: error.message };
   }
@@ -387,7 +386,7 @@ const checkStudentCourseCode = async (
     : {
         status: 400,
         error:
-          "That course is not open for submissions yet. Choose a course from the list, or ask your coordinator to assign an advisor to it.",
+          "You can only choose a course you are enrolled in. Ask your coordinator to add you to the course roster.",
       };
 };
 
