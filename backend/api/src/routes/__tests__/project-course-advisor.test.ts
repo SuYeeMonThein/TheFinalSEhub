@@ -161,6 +161,17 @@ describe("POST /projects course advisor auto-fill", () => {
     expect(created().metadata.files).toBeUndefined();
   });
 
+  it("stamps the time the project was submitted for newest-first ordering", async () => {
+    mockCourse({ id: 5, advisor_id: 7 });
+    const before = Date.now();
+    const res = await post({ courseCode: "1305394" });
+
+    expect(res.status).toBe(201);
+    const stamped = Date.parse(created().metadata.updatedAt);
+    expect(stamped).toBeGreaterThanOrEqual(before);
+    expect(stamped).toBeLessThanOrEqual(Date.now());
+  });
+
   it("rejects a course the student is not enrolled in", async () => {
     mockCourse({ id: 5, advisor_id: 7 });
     const res = await post({ courseCode: "9999999" });

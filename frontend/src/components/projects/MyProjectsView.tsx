@@ -145,6 +145,14 @@ const mockProjects: ProjectDto[] = [
   },
 ];
 
+// Time a project was last submitted or updated, for newest-first ordering.
+// Unknown or invalid dates sort last.
+const lastUpdatedTime = (project: ProjectDto): number => {
+  const value = project.updatedAt ?? project.submissionDate;
+  const time = value ? Date.parse(value) : NaN;
+  return Number.isNaN(time) ? 0 : time;
+};
+
 export const MyProjectsView = ({
   user,
   projects: passedProjects,
@@ -307,7 +315,10 @@ export const MyProjectsView = ({
           if (aNeedsAction && !bNeedsAction) return -1;
           if (bNeedsAction && !aNeedsAction) return 1;
         }
-        return 0;
+        // Most recently submitted or updated first; newer ids break ties.
+        return (
+          lastUpdatedTime(b) - lastUpdatedTime(a) || Number(b.id) - Number(a.id)
+        );
       });
   }, [projectsToUse, searchTerm, user, advisorActionStatuses]);
 

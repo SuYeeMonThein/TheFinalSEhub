@@ -89,6 +89,8 @@ export interface ProjectMetadata {
   award?: string;
   courseCode?: string;
   completionDate?: string;
+  /** ISO time the team last submitted, edited, or changed files. */
+  updatedAt?: string;
   files?: Array<{
     name: string;
     size?: string;

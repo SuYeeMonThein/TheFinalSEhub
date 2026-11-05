@@ -558,6 +558,12 @@ const formatProjectResponse = (record: ProjectWithRelations) => {
     status: DISPLAY_STATUS_MAP[project.status] ?? "Under Review",
     submissionDate: project.start_date,
     lastModified: project.end_date,
+    // When the team last submitted, edited, or changed files; older projects
+    // without this fall back to when they were created.
+    updatedAt:
+      typeof parsedMetadata.updatedAt === "string"
+        ? parsedMetadata.updatedAt
+        : (project.created_at ?? project.start_date),
     description: project.description ?? "",
     students: students.map((student) => student.name),
     studentDetails: students.map((student) => ({
@@ -765,6 +771,7 @@ projectsRouter.post(
       award: normalizeString(award) ?? undefined,
       courseCode: normalizeString(courseCode) ?? undefined,
       completionDate: normalizeString(completionDate) ?? undefined,
+      updatedAt: new Date().toISOString(),
     };
 
     // Find course by courseCode if provided
@@ -1011,6 +1018,7 @@ projectsRouter.patch(
       courseCode: normalizeString(courseCode) ?? undefined,
       completionDate: normalizeString(completionDate) ?? undefined,
       files: files.length > 0 ? files : undefined,
+      updatedAt: new Date().toISOString(),
     };
 
     // Map course code to course id if provided
@@ -1767,7 +1775,11 @@ projectsRouter.post(
         (f: any) => !uploadedNames.has(f.name),
       );
       const updatedFiles = [...keptFiles, ...uploadedFileSummaries];
-      const updatedMetadata = { ...existingMetadata, files: updatedFiles };
+      const updatedMetadata = {
+        ...existingMetadata,
+        files: updatedFiles,
+        updatedAt: new Date().toISOString(),
+      };
 
       const supabase = getSupabaseAdminClient();
       await supabase
@@ -2162,7 +2174,11 @@ projectsRouter.delete(
             typeof f?.name === "string" && fileNameKey(f.name) === targetKey
           ),
       );
-      const updatedMetadata = { ...metadata, files: updatedFiles };
+      const updatedMetadata = {
+        ...metadata,
+        files: updatedFiles,
+        updatedAt: new Date().toISOString(),
+      };
 
       await supabase
         .from("project")

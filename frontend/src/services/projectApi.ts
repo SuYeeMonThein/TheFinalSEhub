@@ -49,6 +49,8 @@ export interface ProjectDto {
   status: ProjectStatus;
   submissionDate: string | null;
   lastModified: string | null;
+  /** When the team last submitted, edited, or changed files (ISO time). */
+  updatedAt?: string | null;
   description: string;
   students: string[];
   studentDetails: Array<{ id: number; name: string; email: string }>;

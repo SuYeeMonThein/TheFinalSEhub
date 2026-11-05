@@ -263,6 +263,8 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
                 externalLinks: updated.externalLinks ?? undefined,
                 teamMembers: updated.teamMembers as ProjectDto["teamMembers"],
                 lastModified: new Date().toISOString(),
+                // Move the edited project to the top straight away.
+                updatedAt: new Date().toISOString(),
               };
               handleProjectUpdate(id, mapped, status);
             }}
