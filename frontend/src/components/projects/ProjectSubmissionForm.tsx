@@ -226,10 +226,22 @@ export const ProjectSubmissionForm = ({
 
   const autoAdvisorEmailRef = useRef<string | null>(null);
   const [invalidFields, setInvalidFields] = useState<string[]>([]);
-  const uploadResultRef = useRef<{ count: number; failed: boolean }>({
+  const uploadResultRef = useRef<{
+    count: number;
+    failed: boolean;
+    reason: string;
+  }>({
     count: 0,
     failed: false,
+    reason: "",
   });
+  // Set when the project saved but its files did not upload: the form stays
+  // open with the files still attached so the student can retry.
+  const [failedUpload, setFailedUpload] = useState<{
+    projectId: number;
+    reason: string;
+  } | null>(null);
+  const [isRetryingUpload, setIsRetryingUpload] = useState(false);
 
   const clearInvalid = (id: string) =>
     setInvalidFields((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : prev));
@@ -394,15 +406,104 @@ export const ProjectSubmissionForm = ({
   ];
 
 
-  // Sentence describing whether the attached files were saved. Only one toast
+  // Sentence describing how many attached files were saved. Only one toast
   // is visible at a time, so this is merged into the success toast.
   const uploadNote = () => {
-    const { count, failed } = uploadResultRef.current;
-    if (failed)
-      return " However, the attached files could not be uploaded — open the project and attach them again.";
+    const { count } = uploadResultRef.current;
     if (count > 0)
       return ` ${count} file${count > 1 ? "s were" : " was"} successfully uploaded and submitted with it.`;
     return "";
+  };
+
+  // Plain-language reason an upload failed, shown to the student.
+  const describeUploadError = (err: unknown): string => {
+    if (err instanceof ApiError && err.message) return err.message;
+    if (err instanceof TypeError)
+      return "The connection to the server was lost. Check your internet connection and try again.";
+    return "The server could not save the files. Please try again.";
+  };
+
+  // Upload the files picked in this form to an already-saved project and
+  // record the outcome in uploadResultRef.
+  const uploadPendingFiles = async (projectId: number, token: string) => {
+    uploadResultRef.current = { count: 0, failed: false, reason: "" };
+    if (pendingFiles.length === 0) return;
+    try {
+      await uploadProjectFiles(projectId, pendingFiles.map((f) => f.file), token);
+      uploadResultRef.current = {
+        count: pendingFiles.length,
+        failed: false,
+        reason: "",
+      };
+    } catch (err) {
+      console.error("File upload failed:", err);
+      uploadResultRef.current = {
+        count: 0,
+        failed: true,
+        reason: describeUploadError(err),
+      };
+    }
+  };
+
+  // The project saved but its files did not: keep the form open with the
+  // files attached and show the reason, instead of closing and losing them.
+  const showUploadFailure = (projectId: number, savedText: string) => {
+    const reason = uploadResultRef.current.reason;
+    setFailedUpload({ projectId, reason });
+    void queryClient.invalidateQueries({ queryKey: ["projects", authToken] });
+    toast({
+      title: "Files were not uploaded",
+      description: `${savedText}, but the attached files could not be uploaded: ${reason} They are still attached below. Click "Retry upload".`,
+      variant: "destructive",
+    });
+  };
+
+  // Leave the form after a successful save (and upload, or a decision to skip it).
+  const finishAndLeave = () => {
+    setFailedUpload(null);
+    setFormData(createInitialFormState());
+    setTeamMembers([buildSubmitterMember()]);
+    setPendingFiles([]);
+    setNewKeyword("");
+    setNewLink("");
+    setNewTeamMember({ email: "", role: "student" });
+    onBack();
+  };
+
+  const retryFailedUpload = async () => {
+    if (!failedUpload || !authToken) return;
+    setIsRetryingUpload(true);
+    await uploadPendingFiles(failedUpload.projectId, authToken);
+    setIsRetryingUpload(false);
+    void queryClient.invalidateQueries({ queryKey: ["projects", authToken] });
+
+    if (uploadResultRef.current.failed) {
+      const reason = uploadResultRef.current.reason;
+      setFailedUpload({ projectId: failedUpload.projectId, reason });
+      toast({
+        title: "Upload failed again",
+        description: reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { count } = uploadResultRef.current;
+    toast({
+      title: "Files uploaded",
+      description: `${count} file${count > 1 ? "s were" : " was"} uploaded to your project.`,
+      variant: "success",
+    });
+    finishAndLeave();
+  };
+
+  const skipFailedUpload = () => {
+    toast({
+      title: "Project saved without the files",
+      description:
+        "You can attach the files later by editing the project from My Projects.",
+    });
+    finishAndLeave();
   };
 
   const projectMutation = useMutation<ProjectDto, Error, CreateProjectPayload>({
@@ -414,20 +515,23 @@ export const ProjectSubmissionForm = ({
       const project = await submitProject(payload, authToken);
 
       // Upload actual files to storage after project is created
-      uploadResultRef.current = { count: 0, failed: false };
-      if (pendingFiles.length > 0) {
-        try {
-          await uploadProjectFiles(project.id, pendingFiles.map((f) => f.file), authToken);
-          uploadResultRef.current = { count: pendingFiles.length, failed: false };
-        } catch (err) {
-          console.error("File upload failed:", err);
-          uploadResultRef.current = { count: 0, failed: true };
-        }
-      }
+      await uploadPendingFiles(project.id, authToken);
 
       return project;
     },
     onSuccess: (project, variables) => {
+      onProjectCreated?.(project);
+
+      if (uploadResultRef.current.failed) {
+        showUploadFailure(
+          project.id,
+          variables.status === "Draft"
+            ? "Your draft was saved"
+            : "Your project was submitted",
+        );
+        return;
+      }
+
       toast({
         title:
           variables.status === "Draft" ? "Draft saved" : "Project submitted",
@@ -437,21 +541,11 @@ export const ProjectSubmissionForm = ({
               uploadNote()
             : "Your project has been submitted and is now under review." +
               uploadNote(),
-        variant:
-          uploadResultRef.current.failed && variables.status !== "Draft"
-            ? "destructive"
-            : "success",
+        variant: "success",
       });
 
-      onProjectCreated?.(project);
       void queryClient.invalidateQueries({ queryKey: ["projects", authToken] });
-      setFormData(createInitialFormState());
-      setTeamMembers([buildSubmitterMember()]);
-      setPendingFiles([]);
-      setNewKeyword("");
-      setNewLink("");
-      setNewTeamMember({ email: "", role: "student" });
-      onBack();
+      finishAndLeave();
     },
     onError: (error) => {
       const message =
@@ -474,37 +568,11 @@ export const ProjectSubmissionForm = ({
       const project = await updateProject(projectId, payload, authToken);
 
       // Upload actual files to storage after project is updated
-      uploadResultRef.current = { count: 0, failed: false };
-      if (pendingFiles.length > 0) {
-        try {
-          await uploadProjectFiles(project.id, pendingFiles.map((f) => f.file), authToken);
-          uploadResultRef.current = { count: pendingFiles.length, failed: false };
-        } catch (err) {
-          console.error("File upload failed:", err);
-          uploadResultRef.current = { count: 0, failed: true };
-        }
-      }
+      await uploadPendingFiles(project.id, authToken);
 
       return project;
     },
     onSuccess: (project, variables) => {
-      toast({
-        title:
-          variables.payload.status === "Draft"
-            ? "Draft updated"
-            : "Project updated",
-        description:
-          variables.payload.status === "Draft"
-            ? "Your project draft has been updated."
-            : "Your project has been updated and submitted for review." +
-              uploadNote(),
-        variant:
-          uploadResultRef.current.failed &&
-          variables.payload.status !== "Draft"
-            ? "destructive"
-            : "success",
-      });
-
       onProjectUpdate?.(
         String(variables.projectId),
         {
@@ -523,8 +591,26 @@ export const ProjectSubmissionForm = ({
         project.status
       );
 
+      if (uploadResultRef.current.failed) {
+        showUploadFailure(project.id, "Your project changes were saved");
+        return;
+      }
+
+      toast({
+        title:
+          variables.payload.status === "Draft"
+            ? "Draft updated"
+            : "Project updated",
+        description:
+          variables.payload.status === "Draft"
+            ? "Your project draft has been updated." + uploadNote()
+            : "Your project has been updated and submitted for review." +
+              uploadNote(),
+        variant: "success",
+      });
+
       void queryClient.invalidateQueries({ queryKey: ["projects", authToken] });
-      onBack();
+      finishAndLeave();
     },
     onError: (error) => {
       const message =
@@ -580,55 +666,70 @@ export const ProjectSubmissionForm = ({
       ...pendingFiles.map((entry) => normalizeProjectFileName(entry.file.name)),
     ]);
 
-    const validFiles = files.filter((file) => {
-      const maxSize = 20 * 1024 * 1024; // matches the server upload limit
-      const allowedExtensions = [
-        "pdf",
-        "doc",
-        "docx",
-        "ppt",
-        "pptx",
-        "xls",
-        "xlsx",
-        "txt",
-        "png",
-        "jpg",
-        "jpeg",
-        "gif",
-        "zip",
-      ];
+    // Limits match the server's upload route.
+    const maxSize = 20 * 1024 * 1024;
+    const maxFilesPerUpload = 10;
+    const allowedExtensions = [
+      "pdf",
+      "doc",
+      "docx",
+      "ppt",
+      "pptx",
+      "xls",
+      "xlsx",
+      "txt",
+      "png",
+      "jpg",
+      "jpeg",
+      "gif",
+      "zip",
+    ];
+
+    // Check each file and keep the reason for any that are refused, so the
+    // student knows exactly what to fix.
+    const validFiles: File[] = [];
+    const rejected: string[] = [];
+    for (const file of files) {
       // Browsers often report an empty/generic MIME type for Office files,
       // so judge by extension rather than file.type.
       const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+      const key = normalizeProjectFileName(file.name);
 
-      const isAllowed =
-        file.size <= maxSize && allowedExtensions.includes(extension);
-      const isDuplicate = blockedNames.has(normalizeProjectFileName(file.name));
-
-      return isAllowed && !isDuplicate;
-    });
+      if (!allowedExtensions.includes(extension)) {
+        rejected.push(`${file.name} (file type not allowed)`);
+      } else if (file.size > maxSize) {
+        rejected.push(
+          `${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB, larger than 20 MB)`,
+        );
+      } else if (blockedNames.has(key)) {
+        rejected.push(`${file.name} (already attached)`);
+      } else if (pendingFiles.length + validFiles.length >= maxFilesPerUpload) {
+        rejected.push(
+          `${file.name} (only ${maxFilesPerUpload} new files can be added at a time)`,
+        );
+      } else {
+        validFiles.push(file);
+        blockedNames.add(key);
+      }
+    }
 
     // Only one toast shows at a time, so report accepted and rejected files together.
-    const rejectedCount = files.length - validFiles.length;
-    const addedNames = validFiles.map((file) => file.name).join(", ");
+    const rejectedNote =
+      rejected.length > 0 ? ` Not added: ${rejected.join("; ")}.` : "";
     if (validFiles.length > 0) {
+      const addedNames = validFiles.map((file) => file.name).join(", ");
       toast({
         title:
           validFiles.length === 1
-            ? "File uploaded successfully"
-            : `${validFiles.length} files uploaded successfully`,
-        variant: "success",
-        description:
-          `${addedNames} uploaded successfully.` +
-          (rejectedCount > 0
-            ? ` ${rejectedCount} file${rejectedCount > 1 ? "s were" : " was"} rejected: only PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, image, or ZIP files up to 20MB that are not already attached are allowed.`
-            : ""),
+            ? "File added"
+            : `${validFiles.length} files added`,
+        variant: rejected.length > 0 ? "destructive" : "success",
+        description: `${addedNames} will be uploaded when you save or submit the project.${rejectedNote}`,
       });
-    } else if (rejectedCount > 0) {
+    } else if (rejected.length > 0) {
       toast({
-        title: "File rejected",
-        description:
-          "Only PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, image, or ZIP files up to 20MB that are not already attached are allowed.",
+        title: rejected.length === 1 ? "File not added" : "Files not added",
+        description: `${rejected.join("; ")}. Allowed: PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, images or ZIP, up to 20 MB each.`,
         variant: "destructive",
       });
     }
@@ -795,6 +896,9 @@ export const ProjectSubmissionForm = ({
   const handleSubmit = (e: React.FormEvent, isDraft = false) => {
     e.preventDefault();
 
+    // The project is already saved; only the file upload is left to retry.
+    if (failedUpload) return;
+
     const missing: { id: string; label: string }[] = [];
     if (!formData.title.trim()) missing.push({ id: "title", label: "Project Title" });
     if (!formData.type) missing.push({ id: "type", label: "Project Type" });
@@ -907,7 +1011,8 @@ export const ProjectSubmissionForm = ({
         ),
         courseCode: formData.courseCode || undefined,
         completionDate: formData.completionDate || undefined,
-        files: formData.files,
+        // Only files already in storage; new ones are added once uploaded.
+        files: formData.files.filter((f) => !f.pendingId),
       };
 
       if (authToken) {
@@ -968,7 +1073,8 @@ export const ProjectSubmissionForm = ({
         ? formData.courseCode.trim()
         : undefined,
       completionDate: formData.completionDate || undefined,
-      files: formData.files,
+      // New files are added to the project once they have been uploaded.
+      files: formData.files.filter((f) => !f.pendingId),
     };
 
     projectMutation.mutate(payload);
@@ -1512,7 +1618,7 @@ export const ProjectSubmissionForm = ({
               {formData.files.length > 0 && (
                 <div className="mt-4 space-y-2">
                   <p className="text-sm font-medium text-gray-700">
-                    Uploaded Files:
+                    Attached Files:
                   </p>
                   {formData.files.map((file, index) => (
                     <div
@@ -1521,6 +1627,11 @@ export const ProjectSubmissionForm = ({
                     >
                       <span className="min-w-0 flex-1 break-all text-sm">
                         {file.name} ({file.size})
+                        {file.pendingId && (
+                          <span className="ml-2 text-xs text-amber-600">
+                            {failedUpload ? "not uploaded" : "uploads when you save"}
+                          </span>
+                        )}
                       </span>
                       <Button
                         type="button"
@@ -1540,7 +1651,47 @@ export const ProjectSubmissionForm = ({
               )}
             </div>
 
-            {/* Submit Buttons */}
+            {/* Upload failed: the project is saved, so swap the submit buttons
+                for retry options (submitting again would create a duplicate). */}
+            {failedUpload ? (
+              <div
+                role="alert"
+                className="rounded-lg border border-red-300 bg-red-50 p-4 space-y-3"
+              >
+                <p className="font-semibold text-red-800">
+                  Your project was saved, but{" "}
+                  {pendingFiles.length === 1
+                    ? "1 file was"
+                    : `${pendingFiles.length} files were`}{" "}
+                  not uploaded.
+                </p>
+                <p className="text-sm text-red-700">
+                  Reason: {failedUpload.reason}
+                </p>
+                <ul className="list-disc pl-5 text-sm text-red-700 break-all">
+                  {pendingFiles.map((entry) => (
+                    <li key={entry.pendingId}>{entry.file.name}</li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap justify-end gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={skipFailedUpload}
+                    disabled={isRetryingUpload}
+                  >
+                    Continue without these files
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => void retryFailedUpload()}
+                    disabled={isRetryingUpload || pendingFiles.length === 0}
+                  >
+                    {isRetryingUpload ? "Uploading..." : "Retry upload"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
             <div className="flex justify-end space-x-4">
               {editingProjectId ? (
                 <>
@@ -1580,6 +1731,7 @@ export const ProjectSubmissionForm = ({
                 </>
               )}
             </div>
+            )}
           </form>
         </CardContent>
       </Card>

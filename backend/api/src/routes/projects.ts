@@ -228,6 +228,20 @@ interface SubmittedFileSummary {
   type?: unknown;
 }
 
+// Uploads are stored as "projects/<id>/<timestamp>_<safe name>", where the
+// safe name has spaces and symbols replaced by "_". These helpers let the
+// original name ("Final Report.pdf") be matched with its stored file
+// ("1712345_Final_Report.pdf").
+const storedFileName = (fileLink: string): string =>
+  (fileLink.split("/").pop() ?? fileLink).replace(/^\d+_/, "");
+
+const fileNameKey = (name: string): string =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+
 const normalizeFiles = (
   value: unknown,
 ): Array<{ name: string; size?: string; type?: string }> => {
@@ -468,20 +482,13 @@ const formatProjectResponse = (record: ProjectWithRelations) => {
       )
     : [];
 
-  const normalizeFileName = (name: string) =>
-    name
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_|_$/g, "");
-
   // Build a lookup of cleaned filename → storagePath for files in the file table
   const fileTableByName = new Map<string, string>();
   for (const dbFile of uploadedFiles ?? []) {
-    const fileName = dbFile.file_link.split("/").pop() ?? dbFile.file_link;
-    // Strip timestamp prefix (e.g., "1234567890_filename.pdf" -> "filename.pdf")
-    const cleanName = fileName.replace(/^\d+_/, "");
-    fileTableByName.set(normalizeFileName(cleanName), dbFile.file_link);
+    fileTableByName.set(
+      fileNameKey(storedFileName(dbFile.file_link)),
+      dbFile.file_link,
+    );
   }
 
   const files: Array<{
@@ -498,7 +505,7 @@ const formatProjectResponse = (record: ProjectWithRelations) => {
       continue;
     }
 
-    const key = normalizeFileName(f.name);
+    const key = fileNameKey(f.name);
     if (seenFileNames.has(key)) {
       continue;
     }
@@ -516,9 +523,8 @@ const formatProjectResponse = (record: ProjectWithRelations) => {
 
   // Also add any file table entries not already represented in metadata
   for (const dbFile of uploadedFiles ?? []) {
-    const fileName = dbFile.file_link.split("/").pop() ?? dbFile.file_link;
-    const cleanName = fileName.replace(/^\d+_/, "");
-    const key = normalizeFileName(cleanName);
+    const cleanName = storedFileName(dbFile.file_link);
+    const key = fileNameKey(cleanName);
 
     if (seenFileNames.has(key)) {
       continue;
@@ -662,7 +668,6 @@ projectsRouter.post(
       teamMembers: rawTeamMembers,
       courseCode,
       completionDate,
-      files: rawFiles,
     } = req.body ?? {};
 
     const courseCheck = await checkStudentCourseCode(
@@ -749,8 +754,10 @@ projectsRouter.post(
     const normalizedSemester = normalizeSemester(semester ?? "Semester 1");
     const keyword = resolveKeyword(keywords);
     const projectYear = mapYearFromDate(completionDate ?? today);
-    const files = normalizeFiles(rawFiles);
 
+    // File names sent with a new project are not stored: a file is added to
+    // the project only once POST /projects/:id/files has put it in storage,
+    // so a failed upload never leaves an undownloadable "Unavailable" entry.
     const metadata: ProjectMetadata = {
       keywords,
       externalLinks,
@@ -758,7 +765,6 @@ projectsRouter.post(
       award: normalizeString(award) ?? undefined,
       courseCode: normalizeString(courseCode) ?? undefined,
       completionDate: normalizeString(completionDate) ?? undefined,
-      files: files.length > 0 ? files : undefined,
     };
 
     // Find course by courseCode if provided
@@ -966,7 +972,22 @@ projectsRouter.patch(
       normalizeTeamMembers(rawTeamMembers),
       courseLookup?.advisor ?? null,
     );
-    const files = normalizeFiles(rawFiles);
+    // Keep the project's existing file entries (with their storagePath) that
+    // the form still lists. Names the form sends that were never uploaded are
+    // dropped; new files are added by POST /projects/:id/files once stored.
+    const existingFiles = Array.isArray(projectRecord.metadata?.files)
+      ? projectRecord.metadata.files
+      : [];
+    let files = existingFiles;
+    if (Array.isArray(rawFiles)) {
+      const listed = new Set(
+        normalizeFiles(rawFiles).map((file) => fileNameKey(file.name)),
+      );
+      files = existingFiles.filter(
+        (file) =>
+          typeof file?.name === "string" && listed.has(fileNameKey(file.name)),
+      );
+    }
 
     // Extract advisor from team members if present
     const advisorCandidate = pickAdvisorFromMembers(normalizedMembers);
@@ -1855,12 +1876,12 @@ projectsRouter.get(
 
         if (fileRows && fileRows.length > 0) {
           // Match by original filename (file_link ends with _<filename>)
-          const match = fileRows.find((row: any) => {
-            const link = row.file_link as string;
-            const fileName = link.split("/").pop() ?? "";
-            const cleanName = fileName.replace(/^\d+_/, "");
-            return cleanName === requestedFilename;
-          });
+          // Stored names have spaces/symbols replaced, so compare by key.
+          const wanted = fileNameKey(requestedFilename);
+          const match = fileRows.find(
+            (row: any) =>
+              fileNameKey(storedFileName(row.file_link as string)) === wanted,
+          );
           if (match) {
             storagePath = match.file_link;
           }
@@ -2089,7 +2110,8 @@ projectsRouter.delete(
       const record = projectResult.data[0];
       const metadata: ProjectMetadata = record.metadata ?? {};
       const metadataFiles = Array.isArray(metadata.files) ? metadata.files : [];
-      const normalizedTarget = requestedFilename.trim().toLowerCase();
+      // Stored names have spaces/symbols replaced, so compare by key.
+      const targetKey = fileNameKey(requestedFilename);
 
       const supabase = getSupabaseAdminClient();
       const { data: fileRows } = await supabase
@@ -2097,16 +2119,14 @@ projectsRouter.delete(
         .select("id, file_link")
         .eq("project_id", projectId);
 
-      const matchingRows = (fileRows ?? []).filter((row: any) => {
-        const fileName = (row.file_link as string).split("/").pop() ?? "";
-        const cleanName = fileName.replace(/^\d+_/, "");
-        return cleanName.trim().toLowerCase() === normalizedTarget;
-      });
+      const matchingRows = (fileRows ?? []).filter(
+        (row: any) =>
+          fileNameKey(storedFileName(row.file_link as string)) === targetKey,
+      );
 
       const metadataHasEntry = metadataFiles.some(
         (f: any) =>
-          typeof f?.name === "string" &&
-          f.name.trim().toLowerCase() === normalizedTarget,
+          typeof f?.name === "string" && fileNameKey(f.name) === targetKey,
       );
 
       if (matchingRows.length === 0 && !metadataHasEntry) {
@@ -2139,8 +2159,7 @@ projectsRouter.delete(
       const updatedFiles = metadataFiles.filter(
         (f: any) =>
           !(
-            typeof f?.name === "string" &&
-            f.name.trim().toLowerCase() === normalizedTarget
+            typeof f?.name === "string" && fileNameKey(f.name) === targetKey
           ),
       );
       const updatedMetadata = { ...metadata, files: updatedFiles };

@@ -150,6 +150,17 @@ describe("POST /projects course advisor auto-fill", () => {
     ).toBe(false);
   });
 
+  it("does not record file names before the files are uploaded", async () => {
+    mockCourse({ id: 5, advisor_id: 7 });
+    const res = await post({
+      courseCode: "1305394",
+      files: [{ name: "Report.pdf", size: "1.0 MB", type: "PDF" }],
+    });
+
+    expect(res.status).toBe(201);
+    expect(created().metadata.files).toBeUndefined();
+  });
+
   it("rejects a course the student is not enrolled in", async () => {
     mockCourse({ id: 5, advisor_id: 7 });
     const res = await post({ courseCode: "9999999" });

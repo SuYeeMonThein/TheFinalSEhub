@@ -4,6 +4,7 @@ import projectsRouter from "../projects";
 import { getProjectById } from "../../services/projectService";
 import { getProjectAccess } from "../../services/projectAccess";
 import { downloadFile } from "../../services/storage";
+import { getSupabaseAdminClient } from "../../services/supabaseClient";
 
 jest.mock("../../middleware/auth", () => ({
   verifyFirebaseAuth: (
@@ -84,6 +85,28 @@ describe("GET /projects/:id/files/:filename (Download button)", () => {
 
     expect(res.status).toBe(200);
     expect(downloadFile).toHaveBeenCalledWith("projects/5/2_Progress_100_.pdf");
+  });
+
+  it("finds a stored file with spaces in its name after the project was edited", async () => {
+    // An edit used to drop storagePath from the metadata, leaving only the
+    // file table, where the name is stored with "_" instead of spaces.
+    withFiles([{ name: "Final Report.pdf" } as any]);
+    (getSupabaseAdminClient as jest.Mock).mockReturnValue({
+      from: () => ({
+        select: () => ({
+          eq: async () => ({
+            data: [{ file_link: "projects/5/1712345_Final_Report.pdf" }],
+          }),
+        }),
+      }),
+    });
+
+    const res = await download("Final Report.pdf");
+
+    expect(res.status).toBe(200);
+    expect(downloadFile).toHaveBeenCalledWith(
+      "projects/5/1712345_Final_Report.pdf",
+    );
   });
 
   it("refuses someone with no access to an unapproved project", async () => {
