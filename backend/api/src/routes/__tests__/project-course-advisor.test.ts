@@ -161,6 +161,27 @@ describe("POST /projects course advisor auto-fill", () => {
     expect(created().metadata.files).toBeUndefined();
   });
 
+  it("explains a duplicate title instead of showing the database error", async () => {
+    mockCourse({ id: 5, advisor_id: 7 });
+    (createProjectRecord as jest.Mock).mockResolvedValue({
+      data: null,
+      error: {
+        code: "23505",
+        message:
+          'duplicate key value violates unique constraint "project_name_year_semester_idx"',
+        details: "Key (name, year, semester)=(T, 2026, 1) already exists.",
+      },
+    });
+
+    const res = await post({ courseCode: "1305394" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe(
+      "A project with this title already exists for this year and semester. Please choose a different title.",
+    );
+    expect(res.body.error).not.toMatch(/constraint|duplicate key/);
+  });
+
   it("stamps the time the project was submitted for newest-first ordering", async () => {
     mockCourse({ id: 5, advisor_id: 7 });
     const before = Date.now();

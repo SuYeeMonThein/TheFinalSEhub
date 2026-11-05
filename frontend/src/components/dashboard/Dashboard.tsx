@@ -232,8 +232,11 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
           />
         );
       case "submit-project":
+        // Separate keys make React build a fresh, empty form here instead of
+        // reusing the edit form (and the project data still in it).
         return (
           <ProjectSubmissionForm
+            key="submit-project"
             user={user}
             authToken={authToken}
             onBack={() => handleViewChange("my-projects")}
@@ -244,6 +247,7 @@ export const Dashboard = ({ user, authToken, onLogout }: DashboardProps) => {
       case "edit-project":
         return (
           <ProjectSubmissionForm
+            key={`edit-project-${editingProjectId ?? "none"}`}
             user={user}
             authToken={authToken}
             onBack={() => {

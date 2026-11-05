@@ -232,6 +232,22 @@ interface SubmittedFileSummary {
 // safe name has spaces and symbols replaced by "_". These helpers let the
 // original name ("Final Report.pdf") be matched with its stored file
 // ("1712345_Final_Report.pdf").
+// The database allows one project per title in each year and semester
+// (unique index project_name_year_semester_idx). Postgres reports a clash
+// as error code 23505; show the student a plain message instead.
+const DUPLICATE_TITLE_MESSAGE =
+  "A project with this title already exists for this year and semester. Please choose a different title.";
+
+const isDuplicateTitleError = (
+  error: { code?: string; message?: string } | null | undefined,
+): boolean =>
+  !!error &&
+  (error.code === "23505" ||
+    /duplicate key value/i.test(error.message ?? "")) &&
+  /project_name_year_semester|\(name, year, semester\)/i.test(
+    `${error.message ?? ""} ${(error as { details?: string }).details ?? ""}`,
+  );
+
 const storedFileName = (fileLink: string): string =>
   (fileLink.split("/").pop() ?? fileLink).replace(/^\d+_/, "");
 
@@ -799,6 +815,11 @@ projectsRouter.post(
       metadata,
     });
 
+    if (isDuplicateTitleError(createResponse.error)) {
+      res.status(409).json({ error: DUPLICATE_TITLE_MESSAGE });
+      return;
+    }
+
     if (createResponse.error || !createResponse.data) {
       res.status(500).json({
         error: createResponse.error?.message ?? "Failed to create project.",
@@ -1046,6 +1067,10 @@ projectsRouter.patch(
       numericProjectId,
       updatePayload,
     );
+    if (isDuplicateTitleError(updateResult.error)) {
+      res.status(409).json({ error: DUPLICATE_TITLE_MESSAGE });
+      return;
+    }
     if (updateResult.error) {
       res.status(500).json({ error: updateResult.error.message });
       return;
