@@ -768,7 +768,7 @@ export const CourseManagement = ({
             }
           }}
         >
-          <DialogContent className="max-w-3xl">
+          <DialogContent className="w-[calc(100vw-2rem)] max-w-4xl">
             <DialogHeader>
               <DialogTitle>
                 Students
@@ -790,8 +790,8 @@ export const CourseManagement = ({
                 No students found for this course yet.
               </div>
             ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
+              <div className="min-w-0 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-sm text-muted-foreground">
                     {selectedStudentIds.size} selected
                   </div>
@@ -847,20 +847,21 @@ export const CourseManagement = ({
                           </TableCell>
                           <TableCell>{student.student_id}</TableCell>
                           <TableCell>{student.name}</TableCell>
-                          <TableCell>{student.email}</TableCell>
+                          <TableCell className="break-all">{student.email}</TableCell>
                           <TableCell>{student.year || "-"}</TableCell>
                           <TableCell className="text-right">
                             <Button
-                              size="sm"
+                              size="icon"
                               variant="outline"
-                              className="text-red-600 hover:text-red-700"
+                              className="h-8 w-8 text-red-600 hover:text-red-700"
                               disabled={isRemovingStudents}
+                              aria-label={`Remove ${student.name}`}
+                              title="Remove from course"
                               onClick={() => {
                                 void handleRemoveStudents([student.student_id]);
                               }}
                             >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Remove
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </TableCell>
                         </TableRow>
