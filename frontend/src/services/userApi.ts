@@ -436,3 +436,16 @@ export const updateUserRoles = async (
 
   return body;
 };
+
+export const lookupUserName = async (
+  email: string,
+  token: string,
+): Promise<string | null> => {
+  const response = await fetch(
+    buildUrl(`/users/lookup?email=${encodeURIComponent(email)}`),
+    { headers: buildAuthHeaders(token) },
+  );
+  if (!response.ok) return null;
+  const body = (await response.json()) as { name?: string };
+  return body.name?.trim() || null;
+};

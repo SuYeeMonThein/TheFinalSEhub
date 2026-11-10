@@ -18,6 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Upload, Plus, X, User, UserCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { fetchCourseAdvisorByCode, fetchEnrolledCourses } from "@/services/courseApi";
+import { lookupUserName } from "@/services/userApi";
 import {
   submitProject,
   updateProject,
@@ -855,6 +856,20 @@ export const ProjectSubmissionForm = ({
 
     setTeamMembers((prev) => [...prev, newMember]);
     setNewTeamMember({ email: "", role: "student" });
+
+    // Fill in the real name right away when the person is already registered.
+    if (authToken) {
+      void lookupUserName(trimmedEmail, authToken)
+        .then((name) => {
+          if (!name) return;
+          setTeamMembers((prev) =>
+            prev.map((member) =>
+              member.id === newMember.id ? { ...member, name } : member,
+            ),
+          );
+        })
+        .catch(() => undefined);
+    }
   };
 
   const removeTeamMember = (id: string) => {

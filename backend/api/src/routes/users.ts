@@ -417,6 +417,36 @@ usersRouter.get(
   },
 );
 
+// Lets any signed-in user resolve a team member's display name from an email
+// (used by the Submit Project form). Returns only the name, never other fields.
+usersRouter.get(
+  "/lookup",
+  verifyFirebaseAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const email =
+      typeof req.query.email === "string" ? req.query.email.trim() : "";
+
+    if (!email || email.length > 254) {
+      res.status(400).json({ error: "A valid email is required." });
+      return;
+    }
+
+    const { data, error } = await findUserByEmail(email);
+
+    if (error) {
+      res.status(500).json({ error: "Failed to look up user." });
+      return;
+    }
+
+    if (!data) {
+      res.status(404).json({ error: "User not found." });
+      return;
+    }
+
+    res.json({ name: data.name, email: data.email });
+  },
+);
+
 usersRouter.get(
   "/me/roles",
   verifyFirebaseAuth,
