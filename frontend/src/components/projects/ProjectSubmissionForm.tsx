@@ -1467,9 +1467,9 @@ export const ProjectSubmissionForm = ({
                     {teamMembers.map((member) => (
                       <div
                         key={member.id}
-                        className="flex items-center justify-between bg-muted/50 p-3 rounded-lg"
+                        className="flex min-w-0 items-center justify-between gap-2 bg-muted/50 p-3 rounded-lg"
                       >
-                        <div className="flex items-center space-x-3">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                           {member.role === "student" && (
                             <Checkbox
                               checked={member.isPrimary}
@@ -1479,13 +1479,13 @@ export const ProjectSubmissionForm = ({
                               className="data-[state=checked]:bg-primary"
                             />
                           )}
-                          <div className="flex items-center space-x-2">
+                          <div className="flex min-w-0 items-center space-x-2">
                             {member.isPrimary ? (
                               <UserCheck className="w-4 h-4 text-primary" />
                             ) : (
                               <User className="w-4 h-4 text-muted-foreground" />
                             )}
-                            <div>
+                            <div className="min-w-0 break-all">
                               {member.name &&
                               member.name.toLowerCase() !==
                                 member.email.toLowerCase() ? (
@@ -1523,7 +1523,7 @@ export const ProjectSubmissionForm = ({
                           variant="ghost"
                           size="sm"
                           onClick={() => removeTeamMember(member.id)}
-                          className="text-destructive hover:text-destructive"
+                          className="shrink-0 text-destructive hover:text-destructive"
                         >
                           <X className="w-4 h-4" />
                         </Button>
@@ -1554,20 +1554,20 @@ export const ProjectSubmissionForm = ({
                 {formData.externalLinks.map((link, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between bg-gray-50 p-2 rounded"
+                    className="flex min-w-0 items-center justify-between gap-2 bg-gray-50 p-2 rounded"
                   >
                     <a
                       href={link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline text-sm"
+                      className="min-w-0 break-all text-blue-600 hover:underline text-sm"
                     >
                       {link}
                     </a>
                     <button
                       type="button"
                       onClick={() => removeExternalLink(link)}
-                      className="text-red-600 hover:text-red-800"
+                      className="shrink-0 text-red-600 hover:text-red-800"
                     >
                       <X className="w-4 h-4" />
                     </button>

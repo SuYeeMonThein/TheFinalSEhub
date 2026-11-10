@@ -1074,9 +1074,9 @@ export const UserManagement = ({ user, authToken }: UserManagementProps) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap justify-between items-center gap-3">
         <h2 className="text-3xl font-bold text-gray-900">User Management</h2>
-        <div className="flex space-x-3">
+        <div className="flex flex-wrap gap-3">
           <Button variant="outline" onClick={generateSampleCsv}>
             <Download className="w-4 h-4 mr-2" />
             Export Users
@@ -1517,8 +1517,8 @@ export const UserManagement = ({ user, authToken }: UserManagementProps) => {
         </CardHeader>
         <CardContent>
           {/* Search and Filters */}
-          <div className="flex space-x-4 mb-6">
-            <div className="flex-1 relative">
+          <div className="flex flex-wrap gap-4 mb-6">
+            <div className="flex-1 min-w-[200px] relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
                 placeholder="Search by name or email..."
@@ -1542,7 +1542,7 @@ export const UserManagement = ({ user, authToken }: UserManagementProps) => {
 
           {/* Bulk actions bar */}
           {selectedUsers.size > 0 && (
-            <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4">
               <span className="text-sm font-medium text-red-800">
                 {selectedUsers.size} user(s) selected
                 {selectedStudentCount > 0

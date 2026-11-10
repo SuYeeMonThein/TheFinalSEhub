@@ -251,8 +251,8 @@ export const ProjectEvaluation = ({ user, project, rubric, onBack }: ProjectEval
             <CardHeader>
               <CardTitle className="flex justify-between items-start">
                 <div className="flex-1">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <span className="text-lg">{index + 1}. {criterion.name}</span>
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <span className="text-lg break-words">{index + 1}. {criterion.name}</span>
                     <Badge variant="outline">{criterion.weight}%</Badge>
                   </div>
                   <p className="text-sm text-muted-foreground font-normal">{criterion.description}</p>

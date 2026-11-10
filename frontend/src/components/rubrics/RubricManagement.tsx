@@ -1137,8 +1137,8 @@ export const RubricManagement = ({
                         <CardContent className="pt-4">
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
-                              <div className="flex items-center space-x-2 mb-2">
-                                <h4 className="font-medium">
+                              <div className="flex flex-wrap items-center gap-2 mb-2">
+                                <h4 className="font-medium break-words">
                                   {criterion.name}
                                 </h4>
                                 <Badge variant="outline">
