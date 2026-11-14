@@ -14,7 +14,7 @@ const getBrevoApiKey = (): string => {
 
 const getSender = () => ({
   name: "SE Project Hub",
-  email: process.env.GMAIL_USER || "pskpsk009@gmail.com",
+  email: process.env.GMAIL_USER || "seprojecthub66@gmail.com",
 });
 
 async function sendEmailViaBrevo(
