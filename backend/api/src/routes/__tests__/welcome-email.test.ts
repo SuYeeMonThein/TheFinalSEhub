@@ -29,6 +29,21 @@ describe("welcome emails", () => {
     expect(body).not.toContain("Student@123");
   });
 
+  it("shows a coordinator-set password and asks the user to change it", async () => {
+    await sendWelcomeEmail({
+      name: "Adv",
+      email: "adv@lamduan.mfu.ac.th",
+      role: "advisor",
+      temporaryPassword: "Temp<Pass>1!",
+    });
+
+    const body = sentBodies[0];
+    expect(body).toContain("Temporary password:");
+    expect(body).toContain("Temp&lt;Pass&gt;1!");
+    expect(body).toContain("change this password as soon as possible");
+    expect(body).toContain("https://example.test/reset?oobCode=abc");
+  });
+
   it("falls back to the Forgot password instructions when no link can be made", async () => {
     (adminAuth.generatePasswordResetLink as jest.Mock).mockRejectedValue(new Error("no account"));
     await sendWelcomeEmail({ name: "Stu", email: "stu@lamduan.mfu.ac.th", role: "student" });

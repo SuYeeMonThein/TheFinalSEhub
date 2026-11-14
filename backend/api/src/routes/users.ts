@@ -336,8 +336,14 @@ usersRouter.post(
       }
     }
 
-    // Email a link for choosing a password (non-blocking – don't fail the request)
-    sendWelcomeEmail({ name, email, role: parsedRole }).catch((err) =>
+    // Email the coordinator-set password and ask the user to change it
+    // (non-blocking – don't fail the request)
+    sendWelcomeEmail({
+      name,
+      email,
+      role: parsedRole,
+      temporaryPassword: password,
+    }).catch((err) =>
       console.error("Welcome email error:", err),
     );
 

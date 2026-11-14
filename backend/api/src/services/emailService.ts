@@ -210,15 +210,27 @@ export async function sendBulkWelcomeEmails(
   return { success, failed, errors };
 }
 
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 /**
- * Send a welcome email via Brevo when an account is created for a user. It
- * contains a one-time link to choose a password. The password itself is never
- * put in the email.
+ * Send a welcome email via Brevo when an account is created for a user.
+ *
+ * When `temporaryPassword` is given (a coordinator created the account and set
+ * the password), the email shows it and asks the user to change it right away.
+ * Otherwise (bulk-uploaded students, whose password nobody knows) it contains
+ * a one-time link to choose a password.
  */
 export async function sendWelcomeEmail(input: {
   name: string;
   email: string;
   role: string;
+  temporaryPassword?: string;
 }): Promise<void> {
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:8080";
 
@@ -262,22 +274,44 @@ export async function sendWelcomeEmail(input: {
             <h1>Welcome to SE Project Hub!</h1>
           </div>
           <div class="content">
-            <p>Hello <strong>${input.name}</strong>,</p>
+            <p>Hello <strong>${escapeHtml(input.name)}</strong>,</p>
             <p>An account has been created for you on SE Project Hub.</p>
 
             <div class="info">
-              <p>📧 <strong>Email:</strong> ${input.email}</p>
+              <p>📧 <strong>Email:</strong> ${escapeHtml(input.email)}</p>
               <p>👤 <strong>Role:</strong> ${input.role.charAt(0).toUpperCase() + input.role.slice(1)}</p>
+              ${
+                input.temporaryPassword
+                  ? `<p>🔑 <strong>Temporary password:</strong> <code style="background:#eef2ff;padding:2px 6px;border-radius:4px;font-size:15px;">${escapeHtml(input.temporaryPassword)}</code></p>`
+                  : ""
+              }
             </div>
 
-            <p>${
-              hasLink
-                ? "Choose your own password to activate your account:"
-                : `Open the sign-in page and choose <strong>Forgot password?</strong> to set your password:`
-            }</p>
+            ${
+              input.temporaryPassword
+                ? `<div style="background:#fef3c7;border-left:4px solid #d97706;padding:14px 20px;border-radius:8px;margin:20px 0;">
+              <p style="margin:6px 0;"><strong>⚠️ Please change this password as soon as possible.</strong></p>
+              <p style="margin:6px 0;">This password was set by your coordinator, so it is not private to you. ${
+                hasLink
+                  ? "Use the button below to choose your own password now."
+                  : "Choose <strong>Forgot password?</strong> on the sign-in page to set your own password."
+              }</p>
+            </div>`
+                : `<p>${
+                    hasLink
+                      ? "Choose your own password to activate your account:"
+                      : `Open the sign-in page and choose <strong>Forgot password?</strong> to set your password:`
+                  }</p>`
+            }
 
             <div style="text-align: center;">
-              <a href="${setPasswordLink}" class="button">${hasLink ? "Set Your Password" : "Open SE Project Hub"}</a>
+              <a href="${setPasswordLink}" class="button">${
+                hasLink
+                  ? input.temporaryPassword
+                    ? "Change My Password Now"
+                    : "Set Your Password"
+                  : "Open SE Project Hub"
+              }</a>
             </div>
 
             <div class="footer">
@@ -293,7 +327,9 @@ export async function sendWelcomeEmail(input: {
 
   await sendEmailViaBrevo(
     { email: input.email, name: input.name },
-    "Set up your SE Project Hub account",
+    input.temporaryPassword
+      ? "Your SE Project Hub account – please change your password"
+      : "Set up your SE Project Hub account",
     html,
   );
 
