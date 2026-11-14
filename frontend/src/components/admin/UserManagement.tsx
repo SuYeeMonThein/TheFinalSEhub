@@ -1540,9 +1540,9 @@ export const UserManagement = ({ user, authToken }: UserManagementProps) => {
             </Select>
           </div>
 
-          {/* Bulk actions bar */}
+          {/* Bulk actions bar – stays pinned to the top while scrolling the list */}
           {selectedUsers.size > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4">
+            <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4 shadow-md">
               <span className="text-sm font-medium text-red-800">
                 {selectedUsers.size} user(s) selected
                 {selectedStudentCount > 0
